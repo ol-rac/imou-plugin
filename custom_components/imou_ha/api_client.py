@@ -52,22 +52,24 @@ class ImouApiClient:
         Raises:
             ImouAuthError: when AppId/AppSecret are invalid.
             ImouError: for any other connection or API failure.
+
         """
         try:
             await self._client.async_get_token()
         except InvalidAppIdOrSecretException as err:
             _LOGGER.debug(
-                "Credential validation failed — invalid AppId/AppSecret: %s", err
+                "Credential validation failed — invalid AppId/AppSecret: %s", err,
             )
             raise ImouAuthError(str(err)) from err
         except ConnectFailedException as err:
             _LOGGER.debug("Credential validation failed — cannot connect: %s", err)
-            raise ImouError(f"Cannot connect to Imou cloud: {err}") from err
+            msg = f"Cannot connect to Imou cloud: {err}"
+            raise ImouError(msg) from err
         except ImouException as err:
             _LOGGER.debug("Credential validation failed — API error: %s", err)
             raise ImouError(str(err)) from err
 
-    async def async_get_devices(self) -> dict[str, ImouDeviceData]:
+    async def async_get_devices(self) -> dict[str, ImouDeviceData]:  # noqa: C901
         """Discover and return all devices bound to this account.
 
         Returns:
@@ -80,6 +82,7 @@ class ImouApiClient:
             ImouDeviceOfflineError: when a device is reported offline (DV1007).
             ImouDeviceSleepingError: when a device is sleeping (DV1030).
             ImouError: for any other failure.
+
         """
         try:
             if self._device_manager is None:
@@ -90,7 +93,8 @@ class ImouApiClient:
             raise ImouAuthError(str(err)) from err
         except ConnectFailedException as err:
             _LOGGER.debug("async_get_devices — connection failure: %s", err)
-            raise ImouError(f"Cannot connect to Imou cloud: {err}") from err
+            msg = f"Cannot connect to Imou cloud: {err}"
+            raise ImouError(msg) from err
         except RequestFailedException as err:
             raise self._translate_exception(err) from err
         except ImouException as err:
