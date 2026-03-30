@@ -33,8 +33,11 @@ DEFAULT_API_URL = "api_fk"
 DEFAULT_SCAN_INTERVAL = 60
 MIN_SCAN_INTERVAL = 30
 
-# Platforms to forward (empty for Phase 1, expanded in later phases)
-PLATFORMS: list[str] = []
+# Platforms to forward
+PLATFORMS: list[str] = ["sensor", "binary_sensor"]
+
+# Sleep-aware polling: max wake-check frequency for sleeping/offline devices (D-10)
+SLEEP_CHECK_INTERVAL = 300  # seconds — max wake-check frequency for sleeping devices (D-10)
 
 # Imou error codes (from pyimouapi/const.py)
 ERROR_CODE_TOKEN_EXPIRED = "TK1002"

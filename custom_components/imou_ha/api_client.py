@@ -134,6 +134,79 @@ class ImouApiClient:
 
         return devices
 
+    async def async_get_device_online_status(self, device_id: str) -> DeviceStatus:
+        """Get device online status via /openapi/deviceOnline (ADR-1 boundary).
+
+        Maps pyimouapi response codes to DeviceStatus:
+          "1" -> ACTIVE, "4" -> SLEEPING, else -> OFFLINE.
+
+        For IPC single-channel cameras, status is in channels[0].onLine.
+        For IoT devices (no channels list), status is in top-level onLine.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            data = await self._device_manager.async_get_device_online_status(device_id)
+            channels = data.get("channels", [])
+            if channels:
+                if len(channels) > 1:
+                    _LOGGER.warning(
+                        "Device %s has %d channels; using channel 0",
+                        device_id,
+                        len(channels),
+                    )
+                raw_status = str(channels[0].get("onLine", "0"))
+            else:
+                raw_status = str(data.get("onLine", "0"))
+
+            if raw_status == "1":
+                return DeviceStatus.ACTIVE
+            if raw_status == "4":
+                return DeviceStatus.SLEEPING
+            return DeviceStatus.OFFLINE
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_get_device_power_info(
+        self, device_id: str
+    ) -> tuple[int | None, str]:
+        """Get battery level and power source via /openapi/getDevicePowerInfo (ADR-1 boundary).
+
+        Returns:
+            (battery_level 0-100 or None, power_source "battery"/"adapter"/"unknown")
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            data = await self._device_manager.async_get_device_power_info(device_id)
+            electricitys = data.get("electricitys", [])
+            if not electricitys:
+                return None, "unknown"
+            elec = electricitys[0]
+            # litElec = lithium battery, alkElec = alkaline, electric = generic/adapter
+            if "litElec" in elec:
+                return int(elec["litElec"]), "battery"
+            if "alkElec" in elec:
+                return int(elec["alkElec"]), "battery"
+            if "electric" in elec:
+                return int(elec["electric"]), "adapter"
+            return None, "unknown"
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
     def _translate_exception(self, err: RequestFailedException) -> ImouError:
         """Translate a RequestFailedException to a domain-specific ImouError.
 

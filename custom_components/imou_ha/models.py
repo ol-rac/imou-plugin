@@ -1,7 +1,7 @@
 """Data models for the Imou integration."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 
@@ -39,4 +39,4 @@ class ImouDeviceData:
     privacy_enabled: bool | None = None
     motion_detected: bool = False
     human_detected: bool = False
-    last_updated: datetime = field(default_factory=datetime.now)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ImouCoordinator
+from .models import DeviceStatus
 
 if TYPE_CHECKING:
     from .models import ImouDeviceData
@@ -57,6 +58,17 @@ class ImouEntity(CoordinatorEntity[ImouCoordinator]):
         return f"imou_ha_{self._device_serial}_{self._entity_type}"
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes including device_state (D-01, STATE-02)."""
+        return {"device_state": self.device_data.status.value}
+
+    @property
     def available(self) -> bool:
-        """Return True only when device serial is present in coordinator data."""
-        return self._device_serial in (self.coordinator.data or {})
+        """Return True only when device is present and active (D-11).
+
+        Sleeping and offline devices make all entities unavailable.
+        ImouDeviceStateSensor overrides this to remain always available (D-12).
+        """
+        if self._device_serial not in (self.coordinator.data or {}):
+            return False
+        return self.device_data.status == DeviceStatus.ACTIVE
