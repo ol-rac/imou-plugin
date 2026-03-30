@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,11 +10,16 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
+from custom_components.imou_ha.budget import ImouBudgetState
+from custom_components.imou_ha.const import MONTHLY_API_LIMIT
 from custom_components.imou_ha.coordinator import ImouCoordinator
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 from custom_components.imou_ha.sensor import (
+    ImouApiCallsRemainingSensor,
     ImouBatterySensor,
+    ImouDailyBurnRateSensor,
     ImouDeviceStateSensor,
+    ImouIntegrationSensor,
 )
 
 SERIAL = "ABC123DEF456"
@@ -262,3 +268,135 @@ class TestImouBatterySensor:
             await sensor.async_added_to_hass()
 
         assert sensor._attr_native_value == 72
+
+
+# ---------------------------------------------------------------------------
+# Integration-level budget sensors (BUDG-02, BUDG-03)
+# ---------------------------------------------------------------------------
+
+
+def _make_budget_coordinator(
+    hass: HomeAssistant,
+    calls_this_month: int = 500,
+    calls_today: int = 50,
+) -> ImouCoordinator:
+    """Create a coordinator with a budget_state for sensor tests."""
+    budget = ImouBudgetState(
+        calls_today=calls_today,
+        calls_this_month=calls_this_month,
+        day_reset_date="2026-03-31",
+        month_reset_date="2026-03",
+        day_start_time="2026-03-31T00:00:00+00:00",
+    )
+    client = AsyncMock()
+    coordinator = ImouCoordinator(hass, client, budget_state=budget)
+    coordinator.data = {}
+    return coordinator
+
+
+ENTRY_ID = "test_entry_123"
+
+
+class TestImouApiCallsRemainingSensor:
+    """Tests for ImouApiCallsRemainingSensor (BUDG-02)."""
+
+    def test_native_value_equals_limit_minus_used(self, hass: HomeAssistant) -> None:
+        """native_value == MONTHLY_API_LIMIT - calls_this_month."""
+        coordinator = _make_budget_coordinator(hass, calls_this_month=1234)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert sensor.native_value == MONTHLY_API_LIMIT - 1234
+
+    def test_extra_state_attributes_has_required_keys(self, hass: HomeAssistant) -> None:
+        """extra_state_attributes contains monthly_limit, calls_this_month, calls_today, reset_date."""
+        coordinator = _make_budget_coordinator(hass, calls_this_month=500, calls_today=50)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        attrs = sensor.extra_state_attributes
+        assert "monthly_limit" in attrs
+        assert "calls_this_month" in attrs
+        assert "calls_today" in attrs
+        assert "reset_date" in attrs
+        assert attrs["monthly_limit"] == MONTHLY_API_LIMIT
+        assert attrs["calls_this_month"] == 500
+        assert attrs["calls_today"] == 50
+
+    def test_reset_date_is_first_of_next_month(self, hass: HomeAssistant) -> None:
+        """extra_state_attributes["reset_date"] is 1st of next month."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        attrs = sensor.extra_state_attributes
+        # reset_date should be a valid date string in YYYY-MM-DD format
+        reset = attrs["reset_date"]
+        assert len(reset) == 10
+        assert reset.endswith("-01")
+
+    def test_entity_category_diagnostic(self, hass: HomeAssistant) -> None:
+        """Sensor has EntityCategory.DIAGNOSTIC."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+    def test_state_class_measurement(self, hass: HomeAssistant) -> None:
+        """Sensor has SensorStateClass.MEASUREMENT."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert sensor.state_class == SensorStateClass.MEASUREMENT
+
+    def test_native_unit_calls(self, hass: HomeAssistant) -> None:
+        """Sensor has native_unit_of_measurement 'calls'."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert sensor.native_unit_of_measurement == "calls"
+
+    def test_no_device_info(self, hass: HomeAssistant) -> None:
+        """Budget sensor has no device_info (integration-level)."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert not hasattr(sensor, "device_info") or sensor.device_info is None
+
+    def test_unique_id_format(self, hass: HomeAssistant) -> None:
+        """unique_id matches pattern imou_ha_{entry_id}_api_calls_remaining."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouApiCallsRemainingSensor(coordinator, ENTRY_ID)
+        assert sensor.unique_id == f"imou_ha_{ENTRY_ID}_api_calls_remaining"
+
+
+class TestImouDailyBurnRateSensor:
+    """Tests for ImouDailyBurnRateSensor (BUDG-03)."""
+
+    def test_native_value_is_projected_rate_rounded(self, hass: HomeAssistant) -> None:
+        """native_value == projected_daily_rate() rounded to int."""
+        coordinator = _make_budget_coordinator(hass, calls_today=10)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        # Value should be a non-negative integer
+        assert isinstance(sensor.native_value, int)
+        assert sensor.native_value >= 0
+
+    def test_native_unit_calls_per_day(self, hass: HomeAssistant) -> None:
+        """Sensor has native_unit_of_measurement 'calls/day'."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        assert sensor.native_unit_of_measurement == "calls/day"
+
+    def test_entity_category_diagnostic(self, hass: HomeAssistant) -> None:
+        """Sensor has EntityCategory.DIAGNOSTIC."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+    def test_state_class_measurement(self, hass: HomeAssistant) -> None:
+        """Sensor has SensorStateClass.MEASUREMENT."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        assert sensor.state_class == SensorStateClass.MEASUREMENT
+
+    def test_no_device_info(self, hass: HomeAssistant) -> None:
+        """Budget sensor has no device_info (integration-level)."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        assert not hasattr(sensor, "device_info") or sensor.device_info is None
+
+    def test_unique_id_format(self, hass: HomeAssistant) -> None:
+        """unique_id matches pattern imou_ha_{entry_id}_api_daily_burn_rate."""
+        coordinator = _make_budget_coordinator(hass)
+        sensor = ImouDailyBurnRateSensor(coordinator, ENTRY_ID)
+        assert sensor.unique_id == f"imou_ha_{ENTRY_ID}_api_daily_burn_rate"

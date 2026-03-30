@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -14,8 +15,9 @@ from homeassistant.const import PERCENTAGE
 from homeassistant.components.sensor import RestoreSensor
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CAPABILITY_ELECTRIC, DOMAIN
+from .const import CAPABILITY_ELECTRIC, MONTHLY_API_LIMIT
 from .entity import ImouEntity
 from .models import DeviceStatus
 
@@ -38,6 +40,11 @@ async def async_setup_entry(
         entities.append(ImouDeviceStateSensor(coordinator, serial))
         if CAPABILITY_ELECTRIC in device.capabilities:
             entities.append(ImouBatterySensor(coordinator, serial))
+
+    # Integration-level budget sensors (D-04: account-wide, not per-device)
+    entities.append(ImouApiCallsRemainingSensor(coordinator, entry.entry_id))
+    entities.append(ImouDailyBurnRateSensor(coordinator, entry.entry_id))
+
     async_add_entities(entities)
 
 
@@ -124,3 +131,77 @@ class ImouBatterySensor(ImouEntity, RestoreSensor):
         attrs = super().extra_state_attributes
         attrs["battery_power_source"] = self.device_data.battery_power_source
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# Integration-level budget sensors (D-05, D-06, D-07, D-08)
+# ---------------------------------------------------------------------------
+
+
+class ImouIntegrationSensor(CoordinatorEntity["ImouCoordinator"], SensorEntity):
+    """Base for integration-level sensors not tied to any device."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ImouCoordinator, entry_id: str, entity_type: str) -> None:
+        """Initialise integration sensor."""
+        super().__init__(coordinator)
+        self._entry_id = entry_id
+        self._entity_type = entity_type
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID for this integration-level sensor."""
+        return f"imou_ha_{self._entry_id}_{self._entity_type}"
+
+
+class ImouApiCallsRemainingSensor(ImouIntegrationSensor):
+    """Sensor showing remaining API calls this month (BUDG-02, D-05, D-07)."""
+
+    _attr_translation_key = "api_calls_remaining"
+    _attr_native_unit_of_measurement = "calls"
+    _attr_icon = "mdi:counter"
+
+    def __init__(self, coordinator: ImouCoordinator, entry_id: str) -> None:
+        """Initialise API calls remaining sensor."""
+        super().__init__(coordinator, entry_id, "api_calls_remaining")
+
+    @property
+    def native_value(self) -> int:
+        """Return remaining API calls this month."""
+        return MONTHLY_API_LIMIT - self.coordinator.budget_state.calls_this_month
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return budget context attributes (D-07)."""
+        bs = self.coordinator.budget_state
+        now = datetime.now(UTC)
+        if now.month == 12:
+            reset = now.replace(year=now.year + 1, month=1, day=1).date().isoformat()
+        else:
+            reset = now.replace(month=now.month + 1, day=1).date().isoformat()
+        return {
+            "monthly_limit": MONTHLY_API_LIMIT,
+            "calls_this_month": bs.calls_this_month,
+            "calls_today": bs.calls_today,
+            "reset_date": reset,
+        }
+
+
+class ImouDailyBurnRateSensor(ImouIntegrationSensor):
+    """Sensor showing projected daily API call rate (BUDG-03, D-05, D-08)."""
+
+    _attr_translation_key = "api_daily_burn_rate"
+    _attr_native_unit_of_measurement = "calls/day"
+    _attr_icon = "mdi:fire"
+
+    def __init__(self, coordinator: ImouCoordinator, entry_id: str) -> None:
+        """Initialise daily burn rate sensor."""
+        super().__init__(coordinator, entry_id, "api_daily_burn_rate")
+
+    @property
+    def native_value(self) -> int:
+        """Return projected daily call count."""
+        return round(self.coordinator.budget_state.projected_daily_rate(datetime.now(UTC)))
