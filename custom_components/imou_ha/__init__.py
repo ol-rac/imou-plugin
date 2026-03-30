@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .api_client import ImouApiClient
+from .budget import BUDGET_STORAGE_KEY, ImouBudgetState
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -33,8 +34,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouHaConfigEntry) -> bo
         entry.data.get(OPT_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
     )
 
-    client = ImouApiClient(app_id, app_secret, api_url)
-    coordinator = ImouCoordinator(hass, client, scan_interval)
+    # Construct ONE shared budget state instance — passed to both client and coordinator
+    stored_budget = entry.data.get(BUDGET_STORAGE_KEY, {})
+    budget_state = ImouBudgetState.from_dict(stored_budget)
+
+    client = ImouApiClient(app_id, app_secret, api_url, budget_state=budget_state)
+    coordinator = ImouCoordinator(hass, client, entry, budget_state, scan_interval)
 
     await coordinator.async_config_entry_first_refresh()
 

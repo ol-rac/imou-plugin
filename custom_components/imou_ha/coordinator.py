@@ -6,11 +6,28 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from homeassistant.components.persistent_notification import async_create as pn_create, async_dismiss as pn_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CAPABILITY_ALARM_MD, CAPABILITY_ELECTRIC, CAPABILITY_MOTION_DETECT, CAPABILITY_PRIVACY, DEFAULT_SCAN_INTERVAL, DOMAIN, SLEEP_CHECK_INTERVAL
+from .budget import BUDGET_STORAGE_KEY, ImouBudgetState
+from .const import (
+    CAPABILITY_ALARM_MD,
+    CAPABILITY_ELECTRIC,
+    CAPABILITY_MOTION_DETECT,
+    CAPABILITY_PRIVACY,
+    DEFAULT_ENABLE_THROTTLE,
+    DEFAULT_RESERVE_SIZE,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    MONTHLY_API_LIMIT,
+    OPT_ENABLE_THROTTLE,
+    OPT_RESERVE_SIZE,
+    SLEEP_CHECK_INTERVAL,
+    THROTTLE_CRITICAL_PCT,
+    THROTTLE_WARN_PCT,
+)
 from .exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
 from .models import DeviceStatus, ImouDeviceData
 
@@ -22,6 +39,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _ALARM_TIME_FMT = "%Y-%m-%d %H:%M:%S"
+_NOTIFICATION_ID = "imou_budget_critical"
 
 type ImouHaConfigEntry = ConfigEntry[ImouCoordinator]
 
@@ -38,6 +56,8 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
         self,
         hass: HomeAssistant,
         client: ImouApiClient,
+        config_entry: ConfigEntry | None = None,
+        budget_state: ImouBudgetState | None = None,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
     ) -> None:
         """Initialise coordinator with HA instance and API client."""
@@ -48,7 +68,79 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
+        self.config_entry = config_entry
+        self._base_scan_interval = scan_interval
         self._sleep_check_times: dict[str, datetime] = {}
+        # Budget state — shared with api_client (same object instance)
+        self._budget_state = budget_state or ImouBudgetState()
+        # Throttle settings from options
+        self._throttle_enabled = (
+            config_entry.options.get(OPT_ENABLE_THROTTLE, DEFAULT_ENABLE_THROTTLE)
+            if config_entry is not None
+            else DEFAULT_ENABLE_THROTTLE
+        )
+        self._reserve_size = (
+            config_entry.options.get(OPT_RESERVE_SIZE, DEFAULT_RESERVE_SIZE)
+            if config_entry is not None
+            else DEFAULT_RESERVE_SIZE
+        )
+        self._notification_active = False
+
+    @property
+    def budget_state(self) -> ImouBudgetState:
+        """Return the shared budget state for sensors to read."""
+        return self._budget_state
+
+    def _check_and_apply_throttle(self) -> None:
+        """Adjust update_interval based on remaining API budget (D-09, D-13)."""
+        if not self._throttle_enabled:
+            self.update_interval = timedelta(seconds=self._base_scan_interval)
+            return
+        effective_limit = MONTHLY_API_LIMIT - self._reserve_size
+        remaining = effective_limit - self._budget_state.calls_this_month
+        pct_remaining = remaining / effective_limit if effective_limit > 0 else 1.0
+        base = timedelta(seconds=self._base_scan_interval)
+        if pct_remaining > THROTTLE_WARN_PCT:
+            self.update_interval = base
+            if self._notification_active:
+                pn_dismiss(self.hass, _NOTIFICATION_ID)
+                self._notification_active = False
+        elif pct_remaining >= THROTTLE_CRITICAL_PCT:
+            self.update_interval = base * 2
+            _LOGGER.warning(
+                "API budget <30%% remaining (%d calls left) — polling doubled",
+                remaining,
+            )
+            if self._notification_active:
+                pn_dismiss(self.hass, _NOTIFICATION_ID)
+                self._notification_active = False
+        else:
+            self.update_interval = base * 4
+            _LOGGER.warning(
+                "API budget <10%% remaining (%d calls left) — polling quadrupled",
+                remaining,
+            )
+            if not self._notification_active:
+                pn_create(
+                    self.hass,
+                    message=(
+                        "Imou API budget is critically low (<10% remaining). "
+                        "Polling has been reduced to protect your remaining calls "
+                        "for device control."
+                    ),
+                    title="Imou Integration — API Budget Warning",
+                    notification_id=_NOTIFICATION_ID,
+                )
+                self._notification_active = True
+
+    def _async_save_budget(self) -> None:
+        """Persist budget state to config entry data."""
+        if self.config_entry is None:
+            return
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={**self.config_entry.data, BUDGET_STORAGE_KEY: self._budget_state.to_dict()},
+        )
 
     async def _async_setup(self) -> None:
         """Discover devices on first coordinator refresh (HA 2024.8+ pattern).
@@ -58,6 +150,7 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
             UpdateFailed: on any other API error (never crashes HA — NFR1).
 
         """
+        self._check_and_apply_throttle()
         try:
             self.data = await self.client.async_get_devices()
         except ImouAuthError as err:
@@ -75,7 +168,10 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
         - POLL-03: Wake-check sleeping/offline devices max every 5 min (D-10).
         - POLL-04: Active devices polled every cycle.
         """
+        self._check_and_apply_throttle()
+
         if not self.data:
+            self._async_save_budget()
             return {}
 
         now = datetime.now(UTC)
@@ -94,6 +190,7 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
             # Clear sleep check timestamp when device is active
             self._sleep_check_times.pop(serial, None)
 
+        self._async_save_budget()
         return self.data
 
     async def _async_check_wake(self, serial: str, device: ImouDeviceData) -> None:

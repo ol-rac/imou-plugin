@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -12,7 +12,14 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.imou_ha.const import SLEEP_CHECK_INTERVAL
+from custom_components.imou_ha.budget import ImouBudgetState
+from custom_components.imou_ha.const import (
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    MONTHLY_API_LIMIT,
+    DEFAULT_RESERVE_SIZE,
+    SLEEP_CHECK_INTERVAL,
+)
 from custom_components.imou_ha.coordinator import ImouCoordinator
 from custom_components.imou_ha.entity import ImouEntity
 from custom_components.imou_ha.exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
@@ -564,3 +571,172 @@ class TestAlarmPolling:
         # Previous values retained
         assert device.motion_detected is True
         assert device.human_detected is False
+
+
+# ---------------------------------------------------------------------------
+# ImouCoordinator — Budget throttle (BUDG-04, BUDG-05)
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_entry(hass: HomeAssistant, options: dict | None = None) -> MockConfigEntry:
+    """Create a MockConfigEntry with optional options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Imou (1 cameras)",
+        data={"app_id": "x", "app_secret": "y", "api_url": "api_fk"},
+        options=options or {},
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+class TestCoordinatorThrottle:
+    """Stepped threshold throttle tests (D-09, D-13)."""
+
+    async def test_normal_budget_keeps_base_interval(self, hass: HomeAssistant) -> None:
+        """Coordinator with >30% budget remaining keeps base update_interval."""
+        entry = _make_mock_entry(hass)
+        budget = ImouBudgetState(calls_this_month=0)
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        coordinator._check_and_apply_throttle()
+
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+
+    async def test_warn_budget_doubles_interval(self, hass: HomeAssistant) -> None:
+        """Coordinator with 10-30% budget remaining doubles update_interval."""
+        entry = _make_mock_entry(hass)
+        effective_limit = MONTHLY_API_LIMIT - DEFAULT_RESERVE_SIZE
+        # Set calls so remaining is 20% of effective_limit
+        budget = ImouBudgetState(calls_this_month=int(effective_limit * 0.8))
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        coordinator._check_and_apply_throttle()
+
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL * 2)
+
+    async def test_critical_budget_quadruples_interval(self, hass: HomeAssistant) -> None:
+        """Coordinator with <10% budget remaining quadruples update_interval."""
+        entry = _make_mock_entry(hass)
+        effective_limit = MONTHLY_API_LIMIT - DEFAULT_RESERVE_SIZE
+        # Set calls so remaining is 5% of effective_limit
+        budget = ImouBudgetState(calls_this_month=int(effective_limit * 0.95))
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        with patch("custom_components.imou_ha.coordinator.pn_create"):
+            coordinator._check_and_apply_throttle()
+
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL * 4)
+
+    async def test_throttle_uses_effective_limit_with_reserve(self, hass: HomeAssistant) -> None:
+        """Throttle thresholds use (MONTHLY_API_LIMIT - reserve_size) as effective limit (D-13)."""
+        entry = _make_mock_entry(hass, options={"reserve_size": 1000})
+        effective_limit = MONTHLY_API_LIMIT - 1000
+        # Set exactly at 30% remaining of effective limit — should be in warn zone
+        calls = int(effective_limit * 0.71)
+        budget = ImouBudgetState(calls_this_month=calls)
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        coordinator._check_and_apply_throttle()
+
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL * 2)
+
+    async def test_throttle_disabled_keeps_base_interval(self, hass: HomeAssistant) -> None:
+        """Throttle disabled via options — interval stays at base even with low budget."""
+        entry = _make_mock_entry(hass, options={"enable_throttle": False})
+        effective_limit = MONTHLY_API_LIMIT - DEFAULT_RESERVE_SIZE
+        budget = ImouBudgetState(calls_this_month=int(effective_limit * 0.95))
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        coordinator._check_and_apply_throttle()
+
+        assert coordinator.update_interval == timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+
+    async def test_critical_creates_persistent_notification(self, hass: HomeAssistant) -> None:
+        """Critical threshold creates persistent notification."""
+        entry = _make_mock_entry(hass)
+        effective_limit = MONTHLY_API_LIMIT - DEFAULT_RESERVE_SIZE
+        budget = ImouBudgetState(calls_this_month=int(effective_limit * 0.95))
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+
+        with patch("custom_components.imou_ha.coordinator.pn_create") as mock_create:
+            coordinator._check_and_apply_throttle()
+            mock_create.assert_called_once()
+            assert coordinator._notification_active is True
+
+    async def test_recovery_dismisses_notification(self, hass: HomeAssistant) -> None:
+        """Normal threshold dismisses persistent notification."""
+        entry = _make_mock_entry(hass)
+        budget = ImouBudgetState(calls_this_month=0)
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+        coordinator._notification_active = True
+
+        with patch("custom_components.imou_ha.coordinator.pn_dismiss") as mock_dismiss:
+            coordinator._check_and_apply_throttle()
+            mock_dismiss.assert_called_once()
+            assert coordinator._notification_active is False
+
+
+class TestCoordinatorBudgetPersistence:
+    """Budget state saved to config entry after poll."""
+
+    async def test_budget_saved_after_update_data(self, hass: HomeAssistant) -> None:
+        """Budget state saved to config entry data after _async_update_data."""
+        entry = _make_mock_entry(hass)
+        budget = ImouBudgetState(calls_this_month=42, calls_today=5, day_reset_date="2026-03-31", month_reset_date="2026-03")
+        client = _make_mock_client({})
+        coordinator = ImouCoordinator(hass, client, entry, budget)
+        coordinator.data = {}
+
+        with patch("custom_components.imou_ha.coordinator.pn_create"), \
+             patch("custom_components.imou_ha.coordinator.pn_dismiss"), \
+             patch.object(hass.config_entries, "async_update_entry") as mock_update:
+            await coordinator._async_update_data()
+
+        # async_update_entry should be called with budget data
+        mock_update.assert_called_once()
+        call_kwargs = mock_update.call_args
+        new_data = call_kwargs.kwargs.get("data") or call_kwargs[1].get("data")
+        from custom_components.imou_ha.budget import BUDGET_STORAGE_KEY
+        assert BUDGET_STORAGE_KEY in new_data
+        assert new_data[BUDGET_STORAGE_KEY]["calls_this_month"] == 42
+
+
+class TestCoordinatorSharedBudgetState:
+    """Proves client and coordinator share the same ImouBudgetState object."""
+
+    async def test_shared_budget_state_identity(self, hass: HomeAssistant) -> None:
+        """api_client and coordinator share the SAME ImouBudgetState object."""
+        from custom_components.imou_ha.api_client import ImouApiClient
+
+        budget_state = ImouBudgetState()
+        with patch("custom_components.imou_ha.api_client.ImouOpenApiClient"):
+            client = ImouApiClient("app", "secret", "url", budget_state=budget_state)
+        entry = _make_mock_entry(hass)
+        coordinator = ImouCoordinator(hass, client, entry, budget_state)
+
+        # Increment via client's reference
+        client._budget_state.increment(datetime.now(UTC))
+
+        # Verify coordinator sees the same increment
+        assert coordinator.budget_state.calls_this_month == 1
+        assert coordinator.budget_state is client._budget_state
+
+    async def test_constructor_accepts_all_params(self, hass: HomeAssistant) -> None:
+        """ImouCoordinator(hass, client, entry, budget_state, scan_interval) instantiates without error."""
+        entry = _make_mock_entry(hass)
+        budget = ImouBudgetState()
+        client = _make_mock_client()
+        coordinator = ImouCoordinator(hass, client, entry, budget, 600)
+
+        assert coordinator._base_scan_interval == 600
+        assert coordinator.config_entry is entry
+        assert coordinator._budget_state is budget
