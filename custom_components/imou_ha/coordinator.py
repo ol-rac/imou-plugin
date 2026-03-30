@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CAPABILITY_ALARM_MD, CAPABILITY_ELECTRIC, CAPABILITY_MOTION_DETECT, DEFAULT_SCAN_INTERVAL, DOMAIN, SLEEP_CHECK_INTERVAL
+from .const import CAPABILITY_ALARM_MD, CAPABILITY_ELECTRIC, CAPABILITY_MOTION_DETECT, CAPABILITY_PRIVACY, DEFAULT_SCAN_INTERVAL, DOMAIN, SLEEP_CHECK_INTERVAL
 from .exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
 from .models import DeviceStatus, ImouDeviceData
 
@@ -122,6 +122,9 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
                 battery_level, power_source = await self.client.async_get_device_power_info(serial)
                 device.battery_level = battery_level
                 device.battery_power_source = power_source
+
+            if CAPABILITY_PRIVACY in device.capabilities:
+                device.privacy_enabled = await self.client.async_get_privacy_mode(serial)
 
             # Alarm poll must happen BEFORE last_updated is set so the time window uses
             # the previous poll's timestamp as begin_time (D-02, D-03).
