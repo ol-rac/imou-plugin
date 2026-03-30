@@ -29,8 +29,8 @@ REGIONAL_ENDPOINTS: dict[str, str] = {
 # Default region (per D-05)
 DEFAULT_API_URL = "api_fk"
 
-# Polling interval (per D-08)
-DEFAULT_SCAN_INTERVAL = 60
+# Polling interval (per D-08, D-09)
+DEFAULT_SCAN_INTERVAL = 300
 MIN_SCAN_INTERVAL = 30
 
 # Platforms to forward
@@ -52,3 +52,6 @@ CAPABILITY_MOTION_DETECT = "MobileDetect"
 CAPABILITY_ALARM_MD = "AlarmMD"
 CAPABILITY_PRIVACY = "closedCamera"
 CAPABILITY_ELECTRIC = "Electric"
+CAPABILITY_HUMAN_DETECT = "HeaderDetect"
+CAPABILITY_HUMAN_DETECT_AI = "AiHuman"
+CAPABILITY_HUMAN_DETECT_SMD = "SMDH"

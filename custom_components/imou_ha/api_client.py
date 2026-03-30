@@ -207,6 +207,50 @@ class ImouApiClient:
         except ImouException as err:
             raise ImouError(str(err)) from err
 
+    async def async_get_alarm_status(
+        self, device_id: str, begin_time: str, end_time: str
+    ) -> tuple[bool, bool]:
+        """Get motion and human detection status via /openapi/getAlarmMessage (D-01).
+
+        Calls the Imou cloud alarm message endpoint directly (pyimouapi 1.2.x has no
+        wrapper for this endpoint — Pitfall 1 from RESEARCH.md).
+
+        Args:
+            device_id: Device serial number.
+            begin_time: Start of alarm window, formatted "%Y-%m-%d %H:%M:%S".
+            end_time: End of alarm window, formatted "%Y-%m-%d %H:%M:%S".
+
+        Returns:
+            (motion_detected, human_detected) tuple of bools.
+            motion_detected: True when any alarm has type == 1 (MobileDetect).
+            human_detected: True when any alarm has type in (0, 4)
+                            (type 0 = human, type 4 = accessory human body).
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other API failure.
+        """
+        try:
+            data = await self._client.async_request_api(
+                "/openapi/getAlarmMessage",
+                {
+                    "deviceId": device_id,
+                    "channelId": "0",
+                    "beginTime": begin_time,
+                    "endTime": end_time,
+                    "count": 30,
+                },
+            )
+            alarms = data.get("alarms", [])
+            motion = any(a.get("type") == 1 for a in alarms)
+            human = any(a.get("type") in (0, 4) for a in alarms)
+            return motion, human
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
     def _translate_exception(self, err: RequestFailedException) -> ImouError:
         """Translate a RequestFailedException to a domain-specific ImouError.
 

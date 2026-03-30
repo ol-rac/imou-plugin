@@ -309,3 +309,136 @@ class TestAsyncGetDevices:
 
         debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
         assert len(debug_records) >= 1
+
+
+# ---------------------------------------------------------------------------
+# async_get_alarm_status
+# ---------------------------------------------------------------------------
+
+
+class TestAlarmStatus:
+    async def test_default_scan_interval_is_300(self) -> None:
+        """DEFAULT_SCAN_INTERVAL must be 300 per D-09."""
+        from custom_components.imou_ha.const import DEFAULT_SCAN_INTERVAL
+
+        assert DEFAULT_SCAN_INTERVAL == 300
+
+    async def test_capability_human_detect_constant(self) -> None:
+        """CAPABILITY_HUMAN_DETECT must be 'HeaderDetect'."""
+        from custom_components.imou_ha.const import CAPABILITY_HUMAN_DETECT
+
+        assert CAPABILITY_HUMAN_DETECT == "HeaderDetect"
+
+    async def test_capability_human_detect_ai_constant(self) -> None:
+        """CAPABILITY_HUMAN_DETECT_AI must be 'AiHuman'."""
+        from custom_components.imou_ha.const import CAPABILITY_HUMAN_DETECT_AI
+
+        assert CAPABILITY_HUMAN_DETECT_AI == "AiHuman"
+
+    async def test_capability_human_detect_smd_constant(self) -> None:
+        """CAPABILITY_HUMAN_DETECT_SMD must be 'SMDH'."""
+        from custom_components.imou_ha.const import CAPABILITY_HUMAN_DETECT_SMD
+
+        assert CAPABILITY_HUMAN_DETECT_SMD == "SMDH"
+
+    async def test_motion_only_alarm_type_1(self) -> None:
+        """alarm with type=1 only -> (True, False)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={"alarms": [{"type": 1, "event": "MobileDetect"}]}
+        )
+        result = await client.async_get_alarm_status(
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+        )
+        assert result == (True, False)
+
+    async def test_human_only_alarm_type_0(self) -> None:
+        """alarm with type=0 only -> (False, True)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={"alarms": [{"type": 0, "event": "HumanDetect"}]}
+        )
+        result = await client.async_get_alarm_status(
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+        )
+        assert result == (False, True)
+
+    async def test_both_motion_and_human_alarms(self) -> None:
+        """alarms with type=1 and type=0 -> (True, True)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={
+                "alarms": [
+                    {"type": 1, "event": "MobileDetect"},
+                    {"type": 0, "event": "HumanDetect"},
+                ]
+            }
+        )
+        result = await client.async_get_alarm_status(
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+        )
+        assert result == (True, True)
+
+    async def test_empty_alarms_returns_false_false(self) -> None:
+        """empty alarms array -> (False, False)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={"alarms": []}
+        )
+        result = await client.async_get_alarm_status(
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+        )
+        assert result == (False, False)
+
+    async def test_accessory_human_body_type_4(self) -> None:
+        """alarm with type=4 (accessory human body) -> (False, True)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={"alarms": [{"type": 4, "event": "AccessoryHumanBody"}]}
+        )
+        result = await client.async_get_alarm_status(
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+        )
+        assert result == (False, True)
+
+    async def test_dv1030_raises_sleeping_error(self) -> None:
+        """RequestFailedException with DV1030 raises ImouDeviceSleepingError."""
+        from pyimouapi.exceptions import RequestFailedException
+
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            side_effect=RequestFailedException("DV1030:Device is sleeping")
+        )
+        with pytest.raises(ImouDeviceSleepingError):
+            await client.async_get_alarm_status(
+                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            )
+
+    async def test_dv1007_raises_offline_error(self) -> None:
+        """RequestFailedException with DV1007 raises ImouDeviceOfflineError."""
+        from pyimouapi.exceptions import RequestFailedException
+
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            side_effect=RequestFailedException("DV1007:device offline")
+        )
+        with pytest.raises(ImouDeviceOfflineError):
+            await client.async_get_alarm_status(
+                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            )
+
+    async def test_calls_get_alarm_message_endpoint(self) -> None:
+        """async_get_alarm_status calls /openapi/getAlarmMessage with correct params."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(return_value={"alarms": []})
+        await client.async_get_alarm_status("DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00")
+
+        client._client.async_request_api.assert_awaited_once()
+        call_args = client._client.async_request_api.call_args
+        assert call_args[0][0] == "/openapi/getAlarmMessage"
+        params = call_args[0][1]
+        assert params["deviceId"] == "DEV123"
+        assert params["channelId"] == "0"
+        assert params["beginTime"] == "2026-03-30 10:00:00"
+        assert params["endTime"] == "2026-03-30 10:05:00"
+        assert params["count"] == 30
