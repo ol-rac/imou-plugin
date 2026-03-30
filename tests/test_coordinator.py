@@ -389,3 +389,178 @@ class TestCoordinatorActivePoll:
         result = await coordinator._async_update_data()
 
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# ImouCoordinator — alarm polling (EVNT-01 data backbone)
+# ---------------------------------------------------------------------------
+
+
+class TestAlarmPolling:
+    """Alarm polling integration in _async_poll_device."""
+
+    async def test_alarm_polled_when_capability_motion_detect(self, hass: HomeAssistant) -> None:
+        """_async_poll_device calls async_get_alarm_status for MobileDetect device."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        client.async_get_alarm_status.assert_called_once()
+
+    async def test_alarm_polled_when_capability_alarm_md(self, hass: HomeAssistant) -> None:
+        """_async_poll_device calls async_get_alarm_status for AlarmMD device."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"AlarmMD"},
+        )
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        client.async_get_alarm_status.assert_called_once()
+
+    async def test_alarm_not_polled_without_motion_capability(self, hass: HomeAssistant) -> None:
+        """_async_poll_device does NOT call async_get_alarm_status for devices without motion capability."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"Dormant", "closedCamera"},
+        )
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        client.async_get_alarm_status.assert_not_called()
+
+    async def test_motion_detected_set_true_when_alarm_returns_motion(self, hass: HomeAssistant) -> None:
+        """device.motion_detected=True when alarm returns (True, False)."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.motion_detected = False
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(True, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        assert device.motion_detected is True
+        assert device.human_detected is False
+
+    async def test_human_detected_set_true_when_alarm_returns_human(self, hass: HomeAssistant) -> None:
+        """device.human_detected=True when alarm returns (False, True)."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.human_detected = False
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, True))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        assert device.motion_detected is False
+        assert device.human_detected is True
+
+    async def test_both_flags_false_when_alarm_returns_no_events(self, hass: HomeAssistant) -> None:
+        """Both flags reset to False when alarm returns (False, False)."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.motion_detected = True
+        device.human_detected = True
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        assert device.motion_detected is False
+        assert device.human_detected is False
+
+    async def test_alarm_uses_last_updated_as_begin_time(self, hass: HomeAssistant) -> None:
+        """Alarm call uses device.last_updated (formatted) as begin_time."""
+        from datetime import timezone
+        known_time = datetime(2026, 3, 30, 10, 0, 0, tzinfo=UTC)
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.last_updated = known_time
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(return_value=(False, False))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        call_args = client.async_get_alarm_status.call_args
+        assert call_args[0][0] == SERIAL
+        assert call_args[0][1] == "2026-03-30 10:00:00"
+
+    async def test_last_updated_set_after_alarm_call(self, hass: HomeAssistant) -> None:
+        """device.last_updated is updated AFTER alarm call to maintain correct time window."""
+        known_time = datetime(2026, 3, 30, 10, 0, 0, tzinfo=UTC)
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.last_updated = known_time
+
+        times_when_called: list[datetime] = []
+
+        async def capture_alarm_call(serial: str, begin_time: str, end_time: str) -> tuple[bool, bool]:
+            # Capture device.last_updated at the time of alarm call
+            times_when_called.append(device.last_updated)
+            return (False, False)
+
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = capture_alarm_call
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        await coordinator._async_poll_device(SERIAL, device)
+
+        # When alarm was called, last_updated should still be the known_time (not yet updated)
+        assert len(times_when_called) == 1
+        assert times_when_called[0] == known_time
+        # After poll, last_updated should be updated to a new time
+        assert device.last_updated != known_time
+
+    async def test_alarm_failure_does_not_crash_poll(self, hass: HomeAssistant) -> None:
+        """ImouError from alarm call is caught and logged — poll completes normally."""
+        device = _make_device_data(
+            status=DeviceStatus.ACTIVE,
+            capabilities={"MobileDetect"},
+        )
+        device.motion_detected = True  # pre-existing state
+        device.human_detected = False
+        client = _make_mock_client({SERIAL: device})
+        client.async_get_alarm_status = AsyncMock(side_effect=ImouError("API fail"))
+        coordinator = ImouCoordinator(hass, client)
+        coordinator.data = {SERIAL: device}
+
+        # Should not raise
+        await coordinator._async_poll_device(SERIAL, device)
+
+        # Previous values retained
+        assert device.motion_detected is True
+        assert device.human_detected is False

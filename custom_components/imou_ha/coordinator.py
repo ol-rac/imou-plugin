@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CAPABILITY_ELECTRIC, DEFAULT_SCAN_INTERVAL, DOMAIN, SLEEP_CHECK_INTERVAL
+from .const import CAPABILITY_ALARM_MD, CAPABILITY_ELECTRIC, CAPABILITY_MOTION_DETECT, DEFAULT_SCAN_INTERVAL, DOMAIN, SLEEP_CHECK_INTERVAL
 from .exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
 from .models import DeviceStatus, ImouDeviceData
 
@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from .api_client import ImouApiClient
 
 _LOGGER = logging.getLogger(__name__)
+
+_ALARM_TIME_FMT = "%Y-%m-%d %H:%M:%S"
 
 type ImouHaConfigEntry = ConfigEntry[ImouCoordinator]
 
@@ -115,12 +117,25 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
         try:
             new_status = await self.client.async_get_device_online_status(serial)
             device.status = new_status
-            device.last_updated = datetime.now(UTC)
 
             if CAPABILITY_ELECTRIC in device.capabilities:
                 battery_level, power_source = await self.client.async_get_device_power_info(serial)
                 device.battery_level = battery_level
                 device.battery_power_source = power_source
+
+            # Alarm poll must happen BEFORE last_updated is set so the time window uses
+            # the previous poll's timestamp as begin_time (D-02, D-03).
+            if CAPABILITY_MOTION_DETECT in device.capabilities or CAPABILITY_ALARM_MD in device.capabilities:
+                try:
+                    begin_str = device.last_updated.strftime(_ALARM_TIME_FMT)
+                    end_str = datetime.now(UTC).strftime(_ALARM_TIME_FMT)
+                    motion, human = await self.client.async_get_alarm_status(serial, begin_str, end_str)
+                    device.motion_detected = motion
+                    device.human_detected = human
+                except ImouError as err:
+                    _LOGGER.warning("Alarm status poll failed for device %s: %s", serial, err)
+
+            device.last_updated = datetime.now(UTC)
         except ImouDeviceSleepingError:
             device.status = DeviceStatus.SLEEPING
             _LOGGER.info("Device %s transitioned to sleeping during poll", serial)
