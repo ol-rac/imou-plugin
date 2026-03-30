@@ -6,6 +6,21 @@ import pytest
 
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
+# ---------------------------------------------------------------------------
+# Enable custom integration discovery for config flow tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Automatically enable custom integrations in all tests.
+
+    The enable_custom_integrations fixture (from pytest-homeassistant-custom-component)
+    pops the cached custom components map so HA re-discovers the imou_ha integration
+    from custom_components/ during config flow tests.
+    """
+    return enable_custom_integrations
+
 
 @pytest.fixture
 def sample_device_data() -> ImouDeviceData:
