@@ -442,3 +442,93 @@ class TestAlarmStatus:
         assert params["beginTime"] == "2026-03-30 10:00:00"
         assert params["endTime"] == "2026-03-30 10:05:00"
         assert params["count"] == 30
+
+
+# ---------------------------------------------------------------------------
+# async_set_message_callback / async_get_message_callback
+# ---------------------------------------------------------------------------
+
+
+class TestMessageCallback:
+    async def test_set_message_callback_enable_true(self) -> None:
+        """async_set_message_callback with enable=True calls setMessageCallback with correct params."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(return_value={})
+        await client.async_set_message_callback(
+            "https://example.com/api/webhook/abc", enable=True
+        )
+
+        client._client.async_request_api.assert_awaited_once()
+        call_args = client._client.async_request_api.call_args
+        assert call_args[0][0] == "/openapi/setMessageCallback"
+        params = call_args[0][1]
+        assert params["callbackFlag"] == "alarm,deviceStatus"
+        assert params["callbackUrl"] == "https://example.com/api/webhook/abc"
+        assert params["status"] == "on"
+
+    async def test_set_message_callback_enable_false(self) -> None:
+        """async_set_message_callback with enable=False calls setMessageCallback with status=off."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(return_value={})
+        await client.async_set_message_callback(
+            "https://example.com/api/webhook/abc", enable=False
+        )
+
+        client._client.async_request_api.assert_awaited_once()
+        call_args = client._client.async_request_api.call_args
+        assert call_args[0][0] == "/openapi/setMessageCallback"
+        params = call_args[0][1]
+        assert params["status"] == "off"
+        assert "callbackFlag" not in params
+        assert "callbackUrl" not in params
+
+    async def test_set_message_callback_translates_request_failed_exception(self) -> None:
+        """RequestFailedException is translated to ImouError subtypes."""
+        from pyimouapi.exceptions import RequestFailedException
+
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            side_effect=RequestFailedException("DV1030:device sleeping")
+        )
+        with pytest.raises(ImouDeviceSleepingError):
+            await client.async_set_message_callback(
+                "https://example.com/api/webhook/abc", enable=True
+            )
+
+    async def test_set_message_callback_translates_imou_exception(self) -> None:
+        """ImouException (non-RequestFailed) is translated to ImouError."""
+        from pyimouapi.exceptions import ImouException
+
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            side_effect=ImouException("generic error")
+        )
+        with pytest.raises(ImouError):
+            await client.async_set_message_callback(
+                "https://example.com/api/webhook/abc", enable=True
+            )
+
+    async def test_get_message_callback_calls_correct_endpoint(self) -> None:
+        """async_get_message_callback calls /openapi/getMessageCallback with empty params."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            return_value={"callbackUrl": "https://example.com/api/webhook/abc", "status": "on"}
+        )
+        result = await client.async_get_message_callback()
+
+        client._client.async_request_api.assert_awaited_once()
+        call_args = client._client.async_request_api.call_args
+        assert call_args[0][0] == "/openapi/getMessageCallback"
+        assert call_args[0][1] == {}
+        assert result["status"] == "on"
+
+    async def test_get_message_callback_translates_request_failed_exception(self) -> None:
+        """RequestFailedException is translated to ImouError subtypes."""
+        from pyimouapi.exceptions import RequestFailedException
+
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(
+            side_effect=RequestFailedException("OP1011:rate limit")
+        )
+        with pytest.raises(ImouRateLimitError):
+            await client.async_get_message_callback()

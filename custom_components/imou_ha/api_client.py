@@ -16,9 +16,13 @@ from pyimouapi.exceptions import (
 
 from .const import (
     CAPABILITY_DORMANT,
+    CHANNEL_DEFAULT,
+    ENABLE_TYPE_CLOSE_CAMERA,
     ERROR_CODE_DEVICE_OFFLINE,
     ERROR_CODE_DEVICE_SLEEPING,
     ERROR_CODE_LICENSE_LIMIT,
+    ERROR_CODE_LIVE_ALREADY_EXIST,
+    ERROR_CODE_LIVE_NOT_EXIST,
     ERROR_CODE_RATE_LIMIT,
 )
 from .exceptions import (
@@ -246,6 +250,149 @@ class ImouApiClient:
             motion = any(a.get("type") == 1 for a in alarms)
             human = any(a.get("type") in (0, 4) for a in alarms)
             return motion, human
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_get_stream_url(
+        self, device_id: str, channel: str = "0"
+    ) -> tuple[str | None, str | None]:
+        """Get HLS stream URLs (HD and SD) for a device channel (STRM-01, D-01).
+
+        Tries ``async_get_stream_url`` first; if session doesn't exist (LV1002) it
+        creates one via ``async_create_stream_url``. If create returns LV1001 (session
+        already exists from another client) falls back to get again.
+
+        Args:
+            device_id: Device serial number.
+            channel: Channel ID, defaults to ``"0"`` for single-channel IPC cameras.
+
+        Returns:
+            (hd_url, sd_url) where hd_url is streams[0].hls and sd_url is streams[1].hls.
+            Either may be None if not present in the response.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            try:
+                data = await self._device_manager.async_get_stream_url(device_id, channel)
+            except RequestFailedException as err:
+                message = err.message if hasattr(err, "message") else str(err)
+                error_code = message.split(":")[0] if ":" in message else message
+                if error_code == ERROR_CODE_LIVE_NOT_EXIST:
+                    # Stream session does not exist — create one
+                    try:
+                        data = await self._device_manager.async_create_stream_url(
+                            device_id, channel, stream_id=0
+                        )
+                    except RequestFailedException as create_err:
+                        create_msg = (
+                            create_err.message
+                            if hasattr(create_err, "message")
+                            else str(create_err)
+                        )
+                        create_code = (
+                            create_msg.split(":")[0] if ":" in create_msg else create_msg
+                        )
+                        if create_code == ERROR_CODE_LIVE_ALREADY_EXIST:
+                            # Session created by another client — get it now
+                            data = await self._device_manager.async_get_stream_url(
+                                device_id, channel
+                            )
+                        else:
+                            raise self._translate_exception(create_err) from create_err
+                else:
+                    raise self._translate_exception(err) from err
+
+            streams = data.get("streams", [])
+            hd_url: str | None = next(
+                (s["hls"] for s in streams if s.get("hls")), None
+            )
+            sd_url: str | None = (
+                streams[1]["hls"]
+                if len(streams) > 1 and streams[1].get("hls")
+                else None
+            )
+            return hd_url, sd_url
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_get_privacy_mode(self, device_id: str) -> bool:
+        """Get current privacy mode (closeCamera) state (CTRL-01).
+
+        Args:
+            device_id: Device serial number.
+
+        Returns:
+            True when privacy mode is enabled (camera lens covered), False otherwise.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            data = await self._device_manager.async_get_device_status(
+                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA
+            )
+            return bool(data.get("enable", False))
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_set_privacy_mode(self, device_id: str, enabled: bool) -> None:
+        """Set privacy mode (closeCamera) state (CTRL-01).
+
+        Args:
+            device_id: Device serial number.
+            enabled: True to enable privacy mode (cover lens), False to disable.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            await self._device_manager.async_set_device_status(
+                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA, enabled
+            )
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_set_message_callback(
+        self, callback_url: str, *, enable: bool
+    ) -> None:
+        """Register or deregister Imou push notification callback URL (per D-02, D-03)."""
+        try:
+            if enable:
+                params = {
+                    "callbackFlag": "alarm,deviceStatus",
+                    "callbackUrl": callback_url,
+                    "status": "on",
+                }
+            else:
+                params = {"status": "off"}
+            await self._client.async_request_api("/openapi/setMessageCallback", params)
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_get_message_callback(self) -> dict[str, str]:
+        """Get current Imou push notification callback configuration."""
+        try:
+            return await self._client.async_request_api("/openapi/getMessageCallback", {})
         except RequestFailedException as err:
             raise self._translate_exception(err) from err
         except ImouException as err:

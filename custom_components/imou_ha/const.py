@@ -9,6 +9,7 @@ CONF_API_URL = "api_url"
 
 # Options keys
 OPT_SCAN_INTERVAL = "scan_interval"
+OPT_WEBHOOK_ENABLED = "webhook_enabled"
 
 # Regional API base URLs (per D-04)
 API_BASE_URLS: dict[str, str] = {
@@ -34,7 +35,7 @@ DEFAULT_SCAN_INTERVAL = 300
 MIN_SCAN_INTERVAL = 30
 
 # Platforms to forward
-PLATFORMS: list[str] = ["sensor", "binary_sensor"]
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "camera", "switch"]
 
 # Sleep-aware polling: max wake-check frequency for sleeping/offline devices (D-10)
 SLEEP_CHECK_INTERVAL = 300  # seconds — max wake-check frequency for sleeping devices (D-10)
@@ -55,3 +56,16 @@ CAPABILITY_ELECTRIC = "Electric"
 CAPABILITY_HUMAN_DETECT = "HeaderDetect"
 CAPABILITY_HUMAN_DETECT_AI = "AiHuman"
 CAPABILITY_HUMAN_DETECT_SMD = "SMDH"
+
+# Stream URL cache TTL in seconds — 5 minutes (D-02)
+STREAM_URL_CACHE_TTL = 300
+
+# Default channel for single-channel IPC cameras
+CHANNEL_DEFAULT = "0"
+
+# Privacy mode (closeCamera) enable type constant (pyimouapi pattern)
+ENABLE_TYPE_CLOSE_CAMERA = "closeCamera"
+
+# Live stream error codes
+ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
+ERROR_CODE_LIVE_ALREADY_EXIST = "LV1001"
