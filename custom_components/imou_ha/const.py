@@ -12,10 +12,10 @@ OPT_SCAN_INTERVAL = "scan_interval"
 
 # Regional API base URLs (per D-04)
 API_BASE_URLS: dict[str, str] = {
-    "api_sg": "https://openapi-sg.easy4ip.com",
-    "api_fk": "https://openapi-fk.easy4ip.com",
-    "api_or": "https://openapi-or.easy4ip.com",
-    "api_cn": "https://openapi.easy4ip.com",
+    "api_sg": "openapi-sg.easy4ip.com",
+    "api_fk": "openapi-fk.easy4ip.com",
+    "api_or": "openapi-or.easy4ip.com",
+    "api_cn": "openapi.easy4ip.com",
 }
 
 # Friendly labels for config flow dropdown (per D-04)
