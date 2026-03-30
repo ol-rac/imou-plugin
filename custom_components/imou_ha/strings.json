@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Imou",
+        "data": {
+          "app_id": "AppId",
+          "app_secret": "AppSecret",
+          "api_url": "Region"
+        }
+      },
+      "confirm": {
+        "title": "Cameras discovered",
+        "description": "Found {camera_count} camera(s): {camera_names}"
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials \u2014 check your AppId and AppSecret",
+      "cannot_connect": "Cannot reach the Imou API \u2014 check your network and region selection",
+      "license_limit": "Account device limit reached (FL1001)",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Imou options",
+        "data": {
+          "app_id": "AppId",
+          "app_secret": "AppSecret",
+          "api_url": "Region",
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  }
+}
