@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from pyimouapi import ImouOpenApiClient
 from pyimouapi.device import ImouDeviceManager
@@ -14,6 +15,7 @@ from pyimouapi.exceptions import (
     RequestFailedException,
 )
 
+from .budget import ImouBudgetState
 from .const import (
     CAPABILITY_DORMANT,
     CHANNEL_DEFAULT,
@@ -45,10 +47,22 @@ class ImouApiClient:
     subtypes. No pyimouapi types leak out of this class.
     """
 
-    def __init__(self, app_id: str, app_secret: str, api_url: str) -> None:
+    def __init__(
+        self,
+        app_id: str,
+        app_secret: str,
+        api_url: str,
+        budget_state: ImouBudgetState | None = None,
+    ) -> None:
         """Initialise the API client with Imou cloud credentials."""
         self._client = ImouOpenApiClient(app_id, app_secret, api_url)
         self._device_manager: ImouDeviceManager | None = None
+        self._budget_state = budget_state
+
+    def _increment_budget(self) -> None:
+        """Increment the API budget counter if budget tracking is enabled."""
+        if self._budget_state is not None:
+            self._budget_state.increment(datetime.now(UTC))
 
     async def async_validate_credentials(self) -> None:
         """Validate credentials by obtaining an access token.
@@ -58,6 +72,7 @@ class ImouApiClient:
             ImouError: for any other connection or API failure.
 
         """
+        self._increment_budget()
         try:
             await self._client.async_get_token()
         except InvalidAppIdOrSecretException as err:
@@ -88,6 +103,7 @@ class ImouApiClient:
             ImouError: for any other failure.
 
         """
+        self._increment_budget()
         try:
             if self._device_manager is None:
                 self._device_manager = ImouDeviceManager(self._client)
@@ -152,6 +168,7 @@ class ImouApiClient:
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other failure.
         """
+        self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
@@ -190,6 +207,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
         """
+        self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
@@ -235,6 +253,7 @@ class ImouApiClient:
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other API failure.
         """
+        self._increment_budget()
         try:
             data = await self._client.async_request_api(
                 "/openapi/getAlarmMessage",
@@ -277,6 +296,7 @@ class ImouApiClient:
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other failure.
         """
+        self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
@@ -336,6 +356,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
         """
+        self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
@@ -359,6 +380,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
         """
+        self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
@@ -374,6 +396,7 @@ class ImouApiClient:
         self, callback_url: str, *, enable: bool
     ) -> None:
         """Register or deregister Imou push notification callback URL (per D-02, D-03)."""
+        self._increment_budget()
         try:
             if enable:
                 params = {
@@ -391,6 +414,7 @@ class ImouApiClient:
 
     async def async_get_message_callback(self) -> dict[str, str]:
         """Get current Imou push notification callback configuration."""
+        self._increment_budget()
         try:
             return await self._client.async_request_api("/openapi/getMessageCallback", {})
         except RequestFailedException as err:

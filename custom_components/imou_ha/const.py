@@ -69,3 +69,15 @@ ENABLE_TYPE_CLOSE_CAMERA = "closeCamera"
 # Live stream error codes
 ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
 ERROR_CODE_LIVE_ALREADY_EXIST = "LV1001"
+
+# API Budget Management (Phase 5, D-08, D-09, D-12, D-13, D-15)
+MONTHLY_API_LIMIT = 30000
+DEFAULT_RESERVE_SIZE = 500
+THROTTLE_WARN_PCT = 0.30     # Double interval when remaining < 30%
+THROTTLE_CRITICAL_PCT = 0.10  # Quadruple interval when remaining < 10%
+ERROR_CODE_QUOTA_EXCEEDED = "OP1013"
+
+# Options keys for budget
+OPT_ENABLE_THROTTLE = "enable_throttle"
+OPT_RESERVE_SIZE = "reserve_size"
+DEFAULT_ENABLE_THROTTLE = True
