@@ -80,6 +80,16 @@
       "privacy": {
         "name": "Privacy mode"
       }
+    },
+    "camera": {
+      "camera": {
+        "name": "Camera"
+      }
+    },
+    "switch": {
+      "privacy": {
+        "name": "Privacy mode"
+      }
     }
   }
 }

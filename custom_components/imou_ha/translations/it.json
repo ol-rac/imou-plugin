@@ -80,6 +80,16 @@
       "privacy": {
         "name": "Modalita privacy"
       }
+    },
+    "camera": {
+      "camera": {
+        "name": "Telecamera"
+      }
+    },
+    "switch": {
+      "privacy": {
+        "name": "Modalita privacy"
+      }
     }
   }
 }

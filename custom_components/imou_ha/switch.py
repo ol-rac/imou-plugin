@@ -60,13 +60,13 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:  # noqa: ARG002
         """Enable privacy mode with poll-after-command verification (CTRL-02)."""
-        await self._async_execute_privacy_command(True)  # noqa: FBT003
+        await self._async_execute_privacy_command(enable=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:  # noqa: ARG002
         """Disable privacy mode with poll-after-command verification (CTRL-02)."""
-        await self._async_execute_privacy_command(False)  # noqa: FBT003
+        await self._async_execute_privacy_command(enable=False)
 
-    async def _async_execute_privacy_command(self, enable: bool) -> None:
+    async def _async_execute_privacy_command(self, *, enable: bool) -> None:
         """Send command and verify via poll-after-command (D-10, D-11, D-12).
 
         1. Send setDeviceCameraStatus command

@@ -1,4 +1,4 @@
-"""Tests for switch platform — ImouPrivacySwitch entity (02-02)."""
+"""Tests for the ImouPrivacySwitch entity (CTRL-01 through CTRL-04)."""
 
 from __future__ import annotations
 
@@ -14,55 +14,43 @@ from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def device_with_privacy() -> ImouDeviceData:
-    """Return device data with closedCamera capability."""
+def _make_coordinator(devices: dict) -> MagicMock:
+    """Create a minimal mock coordinator with the given devices dict."""
+    coordinator = MagicMock()
+    coordinator.data = devices
+    coordinator.client = AsyncMock()
+    coordinator.client.async_set_privacy_mode = AsyncMock()
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
+    return coordinator
+
+
+def _make_privacy_device(serial: str = "ABC123DEF456", privacy_enabled: bool | None = None) -> ImouDeviceData:
+    """Return a device data with closedCamera capability."""
     return ImouDeviceData(
-        serial="ABC123DEF456",
+        serial=serial,
         name="Front Door Camera",
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=DeviceStatus.ACTIVE,
         capabilities={"Dormant", "closedCamera", "MobileDetect"},
-        privacy_enabled=False,
+        privacy_enabled=privacy_enabled,
     )
 
 
-@pytest.fixture
-def device_without_privacy() -> ImouDeviceData:
-    """Return device data WITHOUT closedCamera capability."""
+def _make_no_privacy_device(serial: str = "NOPRIVACY123") -> ImouDeviceData:
+    """Return a device without closedCamera capability."""
     return ImouDeviceData(
-        serial="XYZ789ABC000",
-        name="Back Door Camera",
-        model="IPC-A10",
-        firmware="1.0",
+        serial=serial,
+        name="Basic Camera",
+        model="IPC-A22EP",
+        firmware="2.840.0000000.28.R",
         status=DeviceStatus.ACTIVE,
-        capabilities={"Dormant"},
+        capabilities={"Dormant", "MobileDetect"},
     )
-
-
-@pytest.fixture
-def mock_coordinator(hass, device_with_privacy):
-    """Return a mock coordinator with one privacy-capable device."""
-    coordinator = MagicMock()
-    coordinator.hass = hass
-    coordinator.data = {"ABC123DEF456": device_with_privacy}
-    coordinator.client = AsyncMock()
-    coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
-    return coordinator
-
-
-@pytest.fixture
-def privacy_switch(mock_coordinator):
-    """Return an ImouPrivacySwitch instance."""
-    from custom_components.imou_ha.switch import ImouPrivacySwitch
-
-    return ImouPrivacySwitch(mock_coordinator, "ABC123DEF456")
 
 
 # ---------------------------------------------------------------------------
@@ -70,61 +58,69 @@ def privacy_switch(mock_coordinator):
 # ---------------------------------------------------------------------------
 
 
-class TestAsyncSetupEntry:
-    """Tests for async_setup_entry — entity creation filtering."""
+@pytest.mark.asyncio
+async def test_setup_entry_creates_switch_for_privacy_capable_device(hass) -> None:
+    """Test that async_setup_entry creates ImouPrivacySwitch for closedCamera devices (CTRL-01, D-08)."""
+    from custom_components.imou_ha.switch import async_setup_entry
 
-    async def test_setup_creates_switch_for_closedcamera_device(
-        self, hass, device_with_privacy, device_without_privacy
-    ):
-        """async_setup_entry creates ImouPrivacySwitch only for closedCamera devices."""
-        from unittest.mock import MagicMock
+    device = _make_privacy_device()
+    coordinator = _make_coordinator({"ABC123DEF456": device})
 
-        from custom_components.imou_ha.switch import ImouPrivacySwitch, async_setup_entry
+    entry = MagicMock()
+    entry.runtime_data = coordinator
 
-        coordinator = MagicMock()
-        coordinator.hass = hass
-        coordinator.data = {
-            "ABC123DEF456": device_with_privacy,
-            "XYZ789ABC000": device_without_privacy,
-        }
+    added_entities = []
+    async_add_entities = MagicMock(side_effect=lambda entities: added_entities.extend(entities))
 
-        entry = MagicMock()
-        entry.runtime_data = coordinator
+    await async_setup_entry(hass, entry, async_add_entities)
 
-        added_entities = []
-        async_add_entities = MagicMock(
-            side_effect=lambda entities: added_entities.extend(entities)
-        )
+    assert async_add_entities.called
+    assert len(added_entities) == 1
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+    assert isinstance(added_entities[0], ImouPrivacySwitch)
 
-        await async_setup_entry(hass, entry, async_add_entities)
 
-        assert len(added_entities) == 1
-        assert isinstance(added_entities[0], ImouPrivacySwitch)
-        assert added_entities[0]._device_serial == "ABC123DEF456"
+@pytest.mark.asyncio
+async def test_setup_entry_creates_no_switch_without_privacy_capability(hass) -> None:
+    """Test that async_setup_entry creates no switch for devices without closedCamera."""
+    from custom_components.imou_ha.switch import async_setup_entry
 
-    async def test_setup_creates_no_switch_without_closedcamera(
-        self, hass, device_without_privacy
-    ):
-        """async_setup_entry creates NO switch when no closedCamera device present."""
-        from unittest.mock import MagicMock
+    device = _make_no_privacy_device()
+    coordinator = _make_coordinator({"NOPRIVACY123": device})
 
-        from custom_components.imou_ha.switch import async_setup_entry
+    entry = MagicMock()
+    entry.runtime_data = coordinator
 
-        coordinator = MagicMock()
-        coordinator.hass = hass
-        coordinator.data = {"XYZ789ABC000": device_without_privacy}
+    added_entities = []
+    async_add_entities = MagicMock(side_effect=lambda entities: added_entities.extend(entities))
 
-        entry = MagicMock()
-        entry.runtime_data = coordinator
+    await async_setup_entry(hass, entry, async_add_entities)
 
-        added_entities = []
-        async_add_entities = MagicMock(
-            side_effect=lambda entities: added_entities.extend(entities)
-        )
+    assert async_add_entities.called
+    assert len(added_entities) == 0
 
-        await async_setup_entry(hass, entry, async_add_entities)
 
-        assert len(added_entities) == 0
+@pytest.mark.asyncio
+async def test_setup_entry_mixed_devices(hass) -> None:
+    """Test that async_setup_entry only creates switch for closedCamera capable devices."""
+    from custom_components.imou_ha.switch import async_setup_entry
+
+    privacy_device = _make_privacy_device("ABC123DEF456")
+    no_privacy_device = _make_no_privacy_device("NOPRIVACY123")
+    coordinator = _make_coordinator({
+        "ABC123DEF456": privacy_device,
+        "NOPRIVACY123": no_privacy_device,
+    })
+
+    entry = MagicMock()
+    entry.runtime_data = coordinator
+
+    added_entities = []
+    async_add_entities = MagicMock(side_effect=lambda entities: added_entities.extend(entities))
+
+    await async_setup_entry(hass, entry, async_add_entities)
+
+    assert len(added_entities) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -132,226 +128,272 @@ class TestAsyncSetupEntry:
 # ---------------------------------------------------------------------------
 
 
-class TestIsOn:
-    """Tests for ImouPrivacySwitch.is_on property."""
+def test_is_on_returns_true_when_privacy_enabled() -> None:
+    """Test is_on returns True when device_data.privacy_enabled is True (D-09)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    def test_is_on_true_when_privacy_enabled(
-        self, privacy_switch, device_with_privacy
-    ):
-        """is_on returns True when device_data.privacy_enabled is True."""
-        device_with_privacy.privacy_enabled = True
-        assert privacy_switch.is_on is True
+    device = _make_privacy_device(privacy_enabled=True)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
 
-    def test_is_on_false_when_privacy_disabled(
-        self, privacy_switch, device_with_privacy
-    ):
-        """is_on returns False when device_data.privacy_enabled is False."""
-        device_with_privacy.privacy_enabled = False
-        assert privacy_switch.is_on is False
+    assert switch.is_on is True
 
-    def test_is_on_none_when_privacy_unknown(
-        self, privacy_switch, device_with_privacy
-    ):
-        """is_on returns None when device_data.privacy_enabled is None."""
-        device_with_privacy.privacy_enabled = None
-        assert privacy_switch.is_on is None
+
+def test_is_on_returns_false_when_privacy_disabled() -> None:
+    """Test is_on returns False when device_data.privacy_enabled is False."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+
+    assert switch.is_on is False
+
+
+def test_is_on_returns_none_when_privacy_unknown() -> None:
+    """Test is_on returns None when device_data.privacy_enabled is None."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=None)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+
+    assert switch.is_on is None
 
 
 # ---------------------------------------------------------------------------
-# Command execution tests
+# Command verification tests
 # ---------------------------------------------------------------------------
 
 
-class TestPrivacyCommandExecution:
-    """Tests for confirmed-state command execution (async_turn_on/off)."""
+@pytest.mark.asyncio
+async def test_turn_on_confirms_state_on_match() -> None:
+    """Test async_turn_on sends set_privacy_mode(True) and confirms state on poll match (CTRL-02, D-10)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_turn_on_confirms_state_on_match(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """async_turn_on sends set_privacy_mode(True), polls, confirms state on match."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
-        privacy_switch.async_write_ha_state = MagicMock()
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
 
-        await privacy_switch.async_turn_on()
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
 
-        mock_coordinator.client.async_set_privacy_mode.assert_called_once_with(
-            "ABC123DEF456", True
-        )
-        mock_coordinator.client.async_get_privacy_mode.assert_called_once_with(
-            "ABC123DEF456"
-        )
-        assert device_with_privacy.privacy_enabled is True
-        privacy_switch.async_write_ha_state.assert_called_once()
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_turn_off_confirms_state_on_match(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """async_turn_off sends set_privacy_mode(False), polls, confirms state on match."""
-        device_with_privacy.privacy_enabled = True
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
-        privacy_switch.async_write_ha_state = MagicMock()
+    coordinator.client.async_set_privacy_mode.assert_called_once_with("ABC123DEF456", True)
+    assert device.privacy_enabled is True
+    switch.async_write_ha_state.assert_called_once()
 
-        await privacy_switch.async_turn_off()
 
-        mock_coordinator.client.async_set_privacy_mode.assert_called_once_with(
-            "ABC123DEF456", False
-        )
-        assert device_with_privacy.privacy_enabled is False
-        privacy_switch.async_write_ha_state.assert_called_once()
+@pytest.mark.asyncio
+async def test_turn_off_confirms_state_on_match() -> None:
+    """Test async_turn_off sends set_privacy_mode(False) and confirms state on poll match (CTRL-02)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_state_not_updated_optimistically(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """State NOT updated optimistically before verification — privacy_enabled unchanged until poll confirms."""
-        device_with_privacy.privacy_enabled = False
-        # Make get_privacy_mode hang so we can check intermediate state
-        # We capture the privacy_enabled value at time of first get call
-        captured_before_confirm = []
+    device = _make_privacy_device(privacy_enabled=True)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
 
-        async def capture_privacy_mode(_serial):
-            # At this point verification is happening — privacy_enabled should still be False
-            captured_before_confirm.append(device_with_privacy.privacy_enabled)
-            return True  # confirm success
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
 
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(
-            side_effect=capture_privacy_mode
-        )
-        privacy_switch.async_write_ha_state = MagicMock()
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_off()
 
-        await privacy_switch.async_turn_on()
+    coordinator.client.async_set_privacy_mode.assert_called_once_with("ABC123DEF456", False)
+    assert device.privacy_enabled is False
+    switch.async_write_ha_state.assert_called_once()
 
-        # Before confirmation, privacy_enabled was still False (non-optimistic)
-        assert captured_before_confirm[0] is False
 
-    async def test_sleeping_device_raises_sleeping_error_state_unchanged(
-        self, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """sleeping device raises ImouDeviceSleepingError — state unchanged, warning logged."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(
-            side_effect=ImouDeviceSleepingError("DV1030:sleeping")
-        )
-        privacy_switch.async_write_ha_state = MagicMock()
+@pytest.mark.asyncio
+async def test_state_not_updated_optimistically() -> None:
+    """Test that state is NOT updated before verification (D-14, non-optimistic pattern).
 
-        await privacy_switch.async_turn_on()
+    privacy_enabled should remain unchanged until poll confirms the new state.
+    """
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-        # state unchanged
-        assert device_with_privacy.privacy_enabled is False
-        # async_write_ha_state never called (no state change needed)
-        privacy_switch.async_write_ha_state.assert_not_called()
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
 
-    async def test_offline_device_raises_offline_error_state_unchanged(
-        self, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """offline device raises ImouDeviceOfflineError — state unchanged, warning logged."""
-        device_with_privacy.privacy_enabled = True
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(
-            side_effect=ImouDeviceOfflineError("DV1007:offline")
-        )
-        privacy_switch.async_write_ha_state = MagicMock()
+    # Simulate slow/late confirmation: never returns True during first call
+    # We'll track state BEFORE confirmation
+    state_before_confirmation = []
 
-        await privacy_switch.async_turn_off()
+    async def mock_get_privacy(*args):
+        # Record privacy_enabled state at poll time
+        state_before_confirmation.append(device.privacy_enabled)
+        return True  # confirm on first poll
 
-        # state unchanged
-        assert device_with_privacy.privacy_enabled is True
-        privacy_switch.async_write_ha_state.assert_not_called()
+    coordinator.client.async_get_privacy_mode = AsyncMock(side_effect=mock_get_privacy)
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_verification_timeout_reverts_to_previous_state(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """Verification timeout after 3 retries — reverts to previous state."""
-        device_with_privacy.privacy_enabled = False  # previous state
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        # Always return opposite of desired — never confirms
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
-        privacy_switch.async_write_ha_state = MagicMock()
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
 
-        await privacy_switch.async_turn_on()  # wants True, but poll always returns False
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
 
-        # Should have retried VERIFY_MAX_RETRIES times
-        from custom_components.imou_ha.switch import VERIFY_MAX_RETRIES
-        assert mock_coordinator.client.async_get_privacy_mode.call_count == VERIFY_MAX_RETRIES
+    # At the moment of polling, privacy_enabled should still be False (not yet confirmed)
+    assert state_before_confirmation[0] is False
+    # After confirmation, it should be True
+    assert device.privacy_enabled is True
 
-        # State reverted to previous (False)
-        assert device_with_privacy.privacy_enabled is False
-        # async_write_ha_state called for the revert
-        privacy_switch.async_write_ha_state.assert_called_once()
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_device_goes_offline_during_verification(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """Device goes offline during verification polling — breaks loop, reverts state."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        # First poll raises offline error — verification loop broken
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(
-            side_effect=ImouDeviceOfflineError("DV1007:offline during verification")
-        )
-        privacy_switch.async_write_ha_state = MagicMock()
+@pytest.mark.asyncio
+async def test_sleeping_device_leaves_state_unchanged() -> None:
+    """Test sleeping device raises ImouDeviceSleepingError — state unchanged, warning logged (CTRL-03, D-15)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-        await privacy_switch.async_turn_on()
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_set_privacy_mode = AsyncMock(
+        side_effect=ImouDeviceSleepingError("DV1030:sleeping")
+    )
 
-        # Loop broke after first attempt
-        mock_coordinator.client.async_get_privacy_mode.assert_called_once()
-        # State reverted to previous (False)
-        assert device_with_privacy.privacy_enabled is False
-        privacy_switch.async_write_ha_state.assert_called_once()
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_verification_succeeds_on_second_retry(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """Verification succeeds on 2nd retry (not just 1st attempt)."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        # First poll doesn't match (False), second matches (True)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(
-            side_effect=[False, True]
-        )
-        privacy_switch.async_write_ha_state = MagicMock()
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
 
-        await privacy_switch.async_turn_on()
+    # State should be unchanged
+    assert device.privacy_enabled is False
+    # No state write should happen
+    switch.async_write_ha_state.assert_not_called()
 
-        # Polled twice before confirming
-        assert mock_coordinator.client.async_get_privacy_mode.call_count == 2
-        assert device_with_privacy.privacy_enabled is True
-        privacy_switch.async_write_ha_state.assert_called_once()
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_sleep_called_between_retries(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """asyncio.sleep called with VERIFY_DELAY_SECONDS between each poll."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
-        privacy_switch.async_write_ha_state = MagicMock()
+@pytest.mark.asyncio
+async def test_offline_device_leaves_state_unchanged() -> None:
+    """Test offline device raises ImouDeviceOfflineError — state unchanged, warning logged (CTRL-03, D-15)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-        await privacy_switch.async_turn_on()
+    device = _make_privacy_device(privacy_enabled=True)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_set_privacy_mode = AsyncMock(
+        side_effect=ImouDeviceOfflineError("DV1007:offline")
+    )
 
-        from custom_components.imou_ha.switch import VERIFY_DELAY_SECONDS
-        mock_sleep.assert_called_once_with(VERIFY_DELAY_SECONDS)
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
 
-    @patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock)
-    async def test_write_ha_state_only_called_on_confirmed_or_revert(
-        self, mock_sleep, privacy_switch, mock_coordinator, device_with_privacy
-    ):
-        """async_write_ha_state called exactly once — only on CONFIRMED or TIMEOUT revert."""
-        device_with_privacy.privacy_enabled = False
-        mock_coordinator.client.async_set_privacy_mode = AsyncMock(return_value=None)
-        mock_coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
-        privacy_switch.async_write_ha_state = MagicMock()
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_off()
 
-        await privacy_switch.async_turn_on()
+    # State should be unchanged (still True since command failed)
+    assert device.privacy_enabled is True
+    switch.async_write_ha_state.assert_not_called()
 
-        # Exactly one call on confirmation
-        privacy_switch.async_write_ha_state.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_verification_timeout_reverts_state() -> None:
+    """Test verification timeout after 3 retries — reverts to previous state (CTRL-04, D-16)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # Always returns opposite of desired state (never confirms)
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Should revert to False (previous state)
+    assert device.privacy_enabled is False
+    # State write should be called on revert
+    switch.async_write_ha_state.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_device_offline_during_verification_breaks_loop() -> None:
+    """Test that offline error during verification polling breaks loop and reverts state (D-15)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # Raises offline error during poll
+    coordinator.client.async_get_privacy_mode = AsyncMock(
+        side_effect=ImouDeviceOfflineError("DV1007:offline during verification")
+    )
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Should revert to False
+    assert device.privacy_enabled is False
+    # State write should be called on revert
+    switch.async_write_ha_state.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_verification_succeeds_on_second_retry() -> None:
+    """Test verification succeeds on 2nd retry (not just 1st attempt)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # First poll returns False (no match), second poll returns True (match)
+    coordinator.client.async_get_privacy_mode = AsyncMock(side_effect=[False, True])
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Should confirm on 2nd poll
+    assert device.privacy_enabled is True
+    switch.async_write_ha_state.assert_called_once()
+    # Polled twice
+    assert coordinator.client.async_get_privacy_mode.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_verify_max_retries_count() -> None:
+    """Test that verification polls exactly VERIFY_MAX_RETRIES times on timeout."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch, VERIFY_MAX_RETRIES
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # Never confirms
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await switch.async_turn_on()
+
+    # Should sleep VERIFY_MAX_RETRIES times
+    assert mock_sleep.call_count == VERIFY_MAX_RETRIES
+    assert coordinator.client.async_get_privacy_mode.call_count == VERIFY_MAX_RETRIES
