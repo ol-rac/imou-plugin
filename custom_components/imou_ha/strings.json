@@ -55,6 +55,16 @@
       "online": {
         "name": "Online"
       }
+    },
+    "camera": {
+      "camera": {
+        "name": "Camera"
+      }
+    },
+    "switch": {
+      "privacy": {
+        "name": "Privacy mode"
+      }
     }
   }
 }
