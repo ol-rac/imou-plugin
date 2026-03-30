@@ -61,6 +61,16 @@
       "human_detection": {
         "name": "Human detection"
       }
+    },
+    "camera": {
+      "camera": {
+        "name": "Camera"
+      }
+    },
+    "switch": {
+      "privacy": {
+        "name": "Privacy mode"
+      }
     }
   }
 }
