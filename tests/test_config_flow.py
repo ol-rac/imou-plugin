@@ -19,6 +19,8 @@ from custom_components.imou_ha.const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
+    OPT_ENABLE_THROTTLE,
+    OPT_RESERVE_SIZE,
     OPT_SCAN_INTERVAL,
     REGIONAL_ENDPOINTS,
 )
@@ -518,3 +520,125 @@ async def test_credentials_stored_in_entry_data_only(hass):
     assert DOMAIN not in hass.data or not isinstance(
         hass.data.get(DOMAIN), dict
     ) or CONF_APP_SECRET not in hass.data.get(DOMAIN, {})
+
+
+# ---------------------------------------------------------------------------
+# Test: Options flow includes throttle and reserve fields (D-11, D-15)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_options_flow_has_throttle_and_reserve_fields(hass):
+    """Options flow schema includes enable_throttle and reserve_size fields."""
+    with (
+        patch(
+            "custom_components.imou_ha.config_flow.ImouApiClient",
+            return_value=_mock_client(),
+        ),
+        patch(
+            "custom_components.imou_ha.async_setup_entry",
+            return_value=True,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], VALID_USER_INPUT
+        )
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    entry = entries[0]
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    schema_keys = {str(k) for k in result["data_schema"].schema}
+    assert OPT_ENABLE_THROTTLE in schema_keys
+    assert OPT_RESERVE_SIZE in schema_keys
+
+
+@pytest.mark.asyncio
+async def test_options_flow_accepts_throttle_settings(hass):
+    """Options flow accepts enable_throttle=False and reserve_size=1000."""
+    with (
+        patch(
+            "custom_components.imou_ha.config_flow.ImouApiClient",
+            return_value=_mock_client(),
+        ),
+        patch(
+            "custom_components.imou_ha.async_setup_entry",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_ha.async_unload_entry",
+            return_value=True,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], VALID_USER_INPUT
+        )
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+        entries = hass.config_entries.async_entries(DOMAIN)
+        entry = entries[0]
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                CONF_APP_ID: "my_app_id",
+                CONF_APP_SECRET: "my_secret",
+                CONF_API_URL: DEFAULT_API_URL,
+                OPT_SCAN_INTERVAL: 300,
+                OPT_ENABLE_THROTTLE: False,
+                OPT_RESERVE_SIZE: 1000,
+            },
+        )
+
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert entry.options[OPT_ENABLE_THROTTLE] is False
+        assert entry.options[OPT_RESERVE_SIZE] == 1000
+        await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_options_flow_rejects_reserve_above_max(hass):
+    """Options flow rejects reserve_size > 5000."""
+    with (
+        patch(
+            "custom_components.imou_ha.config_flow.ImouApiClient",
+            return_value=_mock_client(),
+        ),
+        patch(
+            "custom_components.imou_ha.async_setup_entry",
+            return_value=True,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], VALID_USER_INPUT
+        )
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    entry = entries[0]
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    with pytest.raises((vol.Invalid, vol.MultipleInvalid)):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                CONF_APP_ID: "my_app_id",
+                CONF_APP_SECRET: "my_secret",
+                CONF_API_URL: DEFAULT_API_URL,
+                OPT_SCAN_INTERVAL: 300,
+                OPT_RESERVE_SIZE: 6000,  # above max of 5000
+            },
+        )

@@ -24,9 +24,13 @@ from .const import (
     CONF_APP_ID,
     CONF_APP_SECRET,
     DEFAULT_API_URL,
+    DEFAULT_ENABLE_THROTTLE,
+    DEFAULT_RESERVE_SIZE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
+    OPT_ENABLE_THROTTLE,
+    OPT_RESERVE_SIZE,
     OPT_SCAN_INTERVAL,
     OPT_WEBHOOK_ENABLED,
     REGIONAL_ENDPOINTS,
@@ -187,6 +191,10 @@ class ImouOptionsFlow(OptionsFlow):
                     OPT_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL,
                 ): vol.All(int, vol.Range(min=MIN_SCAN_INTERVAL)),
                 vol.Optional(OPT_WEBHOOK_ENABLED, default=False): BooleanSelector(),
+                vol.Optional(OPT_ENABLE_THROTTLE, default=DEFAULT_ENABLE_THROTTLE): BooleanSelector(),
+                vol.Optional(OPT_RESERVE_SIZE, default=DEFAULT_RESERVE_SIZE): vol.All(
+                    int, vol.Range(min=0, max=5000)
+                ),
             },
         )
 

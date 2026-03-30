@@ -33,7 +33,9 @@
           "app_secret": "AppSecret",
           "api_url": "Region",
           "scan_interval": "Polling interval (seconds)",
-          "webhook_enabled": "Enable webhook for instant event detection"
+          "webhook_enabled": "Enable webhook for instant event detection",
+          "enable_throttle": "Auto-throttle polling when budget is low",
+          "reserve_size": "API call reserve for commands"
         }
       }
     }
@@ -50,6 +52,12 @@
       },
       "battery": {
         "name": "Battery"
+      },
+      "api_calls_remaining": {
+        "name": "API calls remaining"
+      },
+      "api_daily_burn_rate": {
+        "name": "API daily burn rate"
       }
     },
     "binary_sensor": {

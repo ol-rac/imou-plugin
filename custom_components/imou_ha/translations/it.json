@@ -33,7 +33,9 @@
           "app_secret": "AppSecret",
           "api_url": "Regione",
           "scan_interval": "Intervallo di polling (secondi)",
-          "webhook_enabled": "Abilita webhook per rilevamento eventi istantaneo"
+          "webhook_enabled": "Abilita webhook per rilevamento eventi istantaneo",
+          "enable_throttle": "Riduzione automatica polling quando il budget e' basso",
+          "reserve_size": "Riserva chiamate API per comandi"
         }
       }
     }
@@ -50,6 +52,12 @@
       },
       "battery": {
         "name": "Batteria"
+      },
+      "api_calls_remaining": {
+        "name": "Chiamate API rimanenti"
+      },
+      "api_daily_burn_rate": {
+        "name": "Consumo giornaliero API"
       }
     },
     "binary_sensor": {

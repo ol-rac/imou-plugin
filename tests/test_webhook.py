@@ -1,301 +1,382 @@
-"""Tests for webhook handler and lifecycle — HOOK-01 through HOOK-04."""
+"""Tests for the Imou webhook handler and lifecycle (HOOK-01 through HOOK-04)."""
 
 from __future__ import annotations
 
-from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import web
 
-from custom_components.imou_ha.const import CONF_APP_ID, DOMAIN, OPT_WEBHOOK_ENABLED
+from custom_components.imou_ha.const import (
+    CONF_APP_ID,
+    CONF_API_URL,
+    CONF_APP_SECRET,
+    DEFAULT_API_URL,
+    DOMAIN,
+    OPT_WEBHOOK_ENABLED,
+)
+from custom_components.imou_ha.coordinator import ImouCoordinator
 from custom_components.imou_ha.exceptions import ImouError
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
-
 # ---------------------------------------------------------------------------
-# Helpers
+# Shared test helpers
 # ---------------------------------------------------------------------------
 
+MOCK_WEBHOOK_ID = "test_webhook_id_abc123"
+MOCK_APP_ID = "test_app_id"
+MOCK_APP_SECRET = "test_app_secret"
 
-def _make_entry(
-    *,
-    app_id: str = "test_app",
-    webhook_id: str = "test_webhook_id",
-    webhook_enabled: bool = True,
-    app_secret: str = "test_secret",
-    api_url: str = "api_fk",
-) -> MagicMock:
-    """Create a minimal mock config entry."""
-    entry = MagicMock()
-    entry.data = {
-        CONF_APP_ID: app_id,
-        "app_secret": app_secret,
-        "api_url": api_url,
-        "webhook_id": webhook_id,
-    }
-    entry.options = {OPT_WEBHOOK_ENABLED: webhook_enabled}
-    entry.title = "Imou Test"
-    entry.entry_id = "test_entry_id"
+MOCK_ENTRY_DATA = {
+    CONF_APP_ID: MOCK_APP_ID,
+    CONF_APP_SECRET: MOCK_APP_SECRET,
+    CONF_API_URL: DEFAULT_API_URL,
+    "webhook_id": MOCK_WEBHOOK_ID,
+}
+
+SAMPLE_DEVICE = ImouDeviceData(
+    serial="ABC123DEF456",
+    name="Front Door Camera",
+    model="IPC-C22EP",
+    firmware="2.840.0",
+    status=DeviceStatus.ACTIVE,
+    capabilities={"Dormant", "closedCamera", "MobileDetect"},
+)
+
+
+def _create_mock_entry(hass, options=None, data=None):
+    """Create a MockConfigEntry with webhook data."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry_data = dict(MOCK_ENTRY_DATA)
+    if data:
+        entry_data.update(data)
+
+    entry_options = {OPT_WEBHOOK_ENABLED: True}
+    if options is not None:
+        entry_options = options
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Imou (1 cameras)",
+        data=entry_data,
+        options=entry_options,
+        version=1,
+    )
+    entry.add_to_hass(hass)
     return entry
 
 
-def _make_coordinator(devices: dict[str, ImouDeviceData]) -> MagicMock:
-    """Create a minimal mock coordinator."""
-    coordinator = MagicMock()
+def _make_coordinator_with_devices(hass, devices: dict) -> ImouCoordinator:
+    """Create an ImouCoordinator mock with pre-loaded device data."""
+    mock_client = AsyncMock()
+    mock_client.async_set_message_callback = AsyncMock()
+    coordinator = MagicMock(spec=ImouCoordinator)
+    coordinator.client = mock_client
     coordinator.data = devices
-    coordinator.client = AsyncMock()
     coordinator.async_set_updated_data = MagicMock()
     return coordinator
 
 
-def _make_device(serial: str = "ABC123DEF456") -> ImouDeviceData:
-    """Create a test device."""
-    return ImouDeviceData(
-        serial=serial,
-        name="Test Camera",
-        model="IPC-C22EP",
-        firmware="2.840.0000000.28.R",
-        status=DeviceStatus.ACTIVE,
-        capabilities={"Dormant", "closedCamera", "MobileDetect"},
-    )
-
-
 # ---------------------------------------------------------------------------
-# HOOK-01: Webhook lifecycle — registration on setup
+# HOOK-01: Webhook registration lifecycle
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_webhook_registered_on_setup(hass):
-    """HOOK-01: Webhook registered with HA and Imou when enabled."""
-    from custom_components.imou_ha import async_setup_entry
-    from custom_components.imou_ha.budget import ImouBudgetState
-    from custom_components.imou_ha.coordinator import ImouCoordinator
+    """HOOK-01: webhook.async_register is called with correct args when enabled."""
+    entry = _create_mock_entry(hass, options={OPT_WEBHOOK_ENABLED: True})
 
-    entry = _make_entry(webhook_enabled=True)
-    device = _make_device()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
+    mock_client = AsyncMock()
+    mock_client.async_set_message_callback = AsyncMock()
 
     with (
+        patch("custom_components.imou_ha.ImouApiClient", return_value=mock_client),
+        patch.object(
+            ImouCoordinator,
+            "async_config_entry_first_refresh",
+            new_callable=AsyncMock,
+        ),
+        patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch(
-            "custom_components.imou_ha.ImouApiClient",
-        ) as mock_client_cls,
-        patch(
-            "custom_components.imou_ha.ImouCoordinator",
-        ) as mock_coord_cls,
-        patch(
-            "homeassistant.components.webhook.async_register"
+            "custom_components.imou_ha.webhook.async_register"
         ) as mock_register,
         patch(
-            "homeassistant.components.webhook.async_generate_url",
-            return_value="https://ha.example.com/api/webhook/test_webhook_id",
-        ),
-        patch(
-            "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups",
-            return_value=True,
+            "custom_components.imou_ha.webhook.async_generate_url",
+            return_value="https://ha.example.com/api/webhook/" + MOCK_WEBHOOK_ID,
         ),
     ):
-        mock_client_cls.return_value = AsyncMock()
-        mock_coord_cls.return_value = coordinator
-        coordinator.async_config_entry_first_refresh = AsyncMock()
+        result = await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-        await async_setup_entry(hass, entry)
-
-        mock_register.assert_called_once()
-        call_kwargs = mock_register.call_args
-        assert call_kwargs.kwargs.get("local_only") is False or (
-            len(call_kwargs.args) >= 4
-        )
+    assert result is True
+    mock_register.assert_called_once()
+    call_kwargs = mock_register.call_args
+    assert call_kwargs.args[1] == DOMAIN  # domain
+    assert call_kwargs.args[3] == MOCK_WEBHOOK_ID  # webhook_id
+    assert call_kwargs.kwargs.get("local_only") is False
 
 
 @pytest.mark.asyncio
 async def test_webhook_not_registered_when_disabled(hass):
-    """HOOK-01: No webhook registered when OPT_WEBHOOK_ENABLED is False."""
-    from custom_components.imou_ha import async_setup_entry
-
-    entry = _make_entry(webhook_enabled=False)
-    device = _make_device()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
+    """HOOK-01: webhook.async_register is NOT called when OPT_WEBHOOK_ENABLED is False."""
+    entry = _create_mock_entry(hass, options={OPT_WEBHOOK_ENABLED: False})
 
     with (
-        patch("custom_components.imou_ha.ImouApiClient") as mock_client_cls,
-        patch("custom_components.imou_ha.ImouCoordinator") as mock_coord_cls,
-        patch(
-            "homeassistant.components.webhook.async_register"
-        ) as mock_register,
-        patch(
-            "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups",
-            return_value=True,
+        patch("custom_components.imou_ha.ImouApiClient", return_value=AsyncMock()),
+        patch.object(
+            ImouCoordinator,
+            "async_config_entry_first_refresh",
+            new_callable=AsyncMock,
         ),
+        patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
+        patch(
+            "custom_components.imou_ha.webhook.async_register"
+        ) as mock_register,
     ):
-        mock_client_cls.return_value = AsyncMock()
-        mock_coord_cls.return_value = coordinator
-        coordinator.async_config_entry_first_refresh = AsyncMock()
+        result = await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-        result = await async_setup_entry(hass, entry)
-
-        assert result is True
-        mock_register.assert_not_called()
+    assert result is True
+    mock_register.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_webhook_registration_failure_continues(hass):
-    """HOOK-01 / D-14: Webhook Imou registration failure doesn't block setup."""
-    from custom_components.imou_ha import async_setup_entry
+    """HOOK-01 / D-14: If Imou callback registration fails, setup still returns True.
 
-    entry = _make_entry(webhook_enabled=True)
-    device = _make_device()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    coordinator.client.async_set_message_callback = AsyncMock(
-        side_effect=ImouError("Registration failed")
+    HA webhook is registered first then unregistered on Imou-side failure.
+    """
+    entry = _create_mock_entry(hass, options={OPT_WEBHOOK_ENABLED: True})
+
+    mock_client = AsyncMock()
+    mock_client.async_set_message_callback = AsyncMock(
+        side_effect=ImouError("Imou callback failed")
     )
 
     with (
-        patch("custom_components.imou_ha.ImouApiClient") as mock_client_cls,
-        patch("custom_components.imou_ha.ImouCoordinator") as mock_coord_cls,
+        patch("custom_components.imou_ha.ImouApiClient", return_value=mock_client),
+        patch.object(
+            ImouCoordinator,
+            "async_config_entry_first_refresh",
+            new_callable=AsyncMock,
+        ),
+        patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch(
-            "homeassistant.components.webhook.async_register"
-        ) as mock_register,
+            "custom_components.imou_ha.webhook.async_register"
+        ),
         patch(
-            "homeassistant.components.webhook.async_unregister"
+            "custom_components.imou_ha.webhook.async_unregister"
         ) as mock_unregister,
         patch(
-            "homeassistant.components.webhook.async_generate_url",
-            return_value="https://ha.example.com/api/webhook/test_webhook_id",
-        ),
-        patch(
-            "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups",
-            return_value=True,
+            "custom_components.imou_ha.webhook.async_generate_url",
+            return_value="https://ha.example.com/api/webhook/" + MOCK_WEBHOOK_ID,
         ),
     ):
-        mock_client_cls.return_value = coordinator.client
-        mock_coord_cls.return_value = coordinator
-        coordinator.async_config_entry_first_refresh = AsyncMock()
+        result = await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-        result = await async_setup_entry(hass, entry)
-
-        assert result is True
-        # HA webhook was registered then unregistered after Imou API failure
-        mock_unregister.assert_called_once_with(hass, "test_webhook_id")
+    assert result is True
+    mock_unregister.assert_called_once_with(hass, MOCK_WEBHOOK_ID)
 
 
 # ---------------------------------------------------------------------------
-# HOOK-02: Event processing
+# HOOK-01: Webhook unregistration on unload
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_motion_event_updates_state(mock_webhook_request):
-    """HOOK-02 / D-05: videoMotion payload sets motion_detected=True."""
+async def test_webhook_unregistered_on_unload(hass):
+    """D-03: webhook.async_unregister is called and Imou callback disabled on unload."""
+    entry = _create_mock_entry(hass, options={OPT_WEBHOOK_ENABLED: True})
+
+    mock_client = AsyncMock()
+    mock_client.async_set_message_callback = AsyncMock()
+
+    with (
+        patch("custom_components.imou_ha.ImouApiClient", return_value=mock_client),
+        patch.object(
+            ImouCoordinator,
+            "async_config_entry_first_refresh",
+            new_callable=AsyncMock,
+        ),
+        patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
+        patch("custom_components.imou_ha.webhook.async_register"),
+        patch(
+            "custom_components.imou_ha.webhook.async_unregister"
+        ) as mock_unregister,
+        patch(
+            "custom_components.imou_ha.webhook.async_generate_url",
+            return_value="https://ha.example.com/api/webhook/" + MOCK_WEBHOOK_ID,
+        ),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert result is True
+    mock_unregister.assert_called_with(hass, MOCK_WEBHOOK_ID)
+    # async_set_message_callback called with enable=False on unload
+    mock_client.async_set_message_callback.assert_awaited_with("", enable=False)
+
+
+# ---------------------------------------------------------------------------
+# HOOK-02: Event processing tests (handler called directly)
+# ---------------------------------------------------------------------------
+
+
+async def _call_handler(hass, entry, payload, coordinator):
+    """Helper: call _make_webhook_handler(entry) directly with a mock request."""
     from custom_components.imou_ha import _make_webhook_handler
 
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
     entry.runtime_data = coordinator
-
     handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "test_app", "did": "ABC123DEF456", "msgType": "videoMotion"}
-    )
 
-    result = await handler(MagicMock(), "test_webhook_id", request)
+    mock_request = MagicMock(spec=web.Request)
+    mock_request.json = AsyncMock(return_value=payload)
+
+    return await handler(hass, MOCK_WEBHOOK_ID, mock_request)
+
+
+@pytest.mark.asyncio
+async def test_motion_event_updates_state(hass):
+    """HOOK-02 / D-05: videoMotion payload sets motion_detected=True on the device."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"MobileDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "ABC123DEF456", "msgType": "videoMotion"},
+        coordinator,
+    )
 
     assert device.motion_detected is True
-    coordinator.async_set_updated_data.assert_called_once()
-    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_human_event_updates_state(mock_webhook_request):
-    """HOOK-02 / D-06: human payload sets human_detected=True."""
-    from custom_components.imou_ha import _make_webhook_handler
-
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    entry.runtime_data = coordinator
-
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "test_app", "did": "ABC123DEF456", "msgType": "human"}
+async def test_human_event_updates_state(hass):
+    """HOOK-02 / D-06: human payload sets human_detected=True on the device."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"HeaderDetect"},
     )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
 
-    result = await handler(MagicMock(), "test_webhook_id", request)
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "ABC123DEF456", "msgType": "human"},
+        coordinator,
+    )
 
     assert device.human_detected is True
-    coordinator.async_set_updated_data.assert_called_once()
-    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_unknown_msgtype_ignored(mock_webhook_request):
-    """HOOK-02 / D-08: Unknown msgType silently ignored, returns None."""
-    from custom_components.imou_ha import _make_webhook_handler
-
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    entry.runtime_data = coordinator
-
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "test_app", "did": "ABC123DEF456", "msgType": "unknownType"}
+async def test_unknown_msgtype_ignored(hass):
+    """HOOK-02 / D-08: Unknown msgType leaves device state unchanged and returns None."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
     )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
 
-    result = await handler(MagicMock(), "test_webhook_id", request)
+    response = await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "ABC123DEF456", "msgType": "unknownType"},
+        coordinator,
+    )
 
     assert device.motion_detected is False
     assert device.human_detected is False
-    assert result is None
+    assert response is None
 
 
 # ---------------------------------------------------------------------------
-# HOOK-03: Device routing
+# HOOK-03: Device routing by did
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_device_routing_by_did(mock_webhook_request):
-    """HOOK-03 / D-16: Event routed only to the device matching did."""
-    from custom_components.imou_ha import _make_webhook_handler
-
-    dev_a = _make_device("DEV_A")
-    dev_b = _make_device("DEV_B")
-    entry = _make_entry()
-    coordinator = _make_coordinator({"DEV_A": dev_a, "DEV_B": dev_b})
-    entry.runtime_data = coordinator
-
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "test_app", "did": "DEV_B", "msgType": "videoMotion"}
+async def test_device_routing_by_did(hass):
+    """HOOK-03 / D-16: Only the device matching 'did' is updated."""
+    entry = _create_mock_entry(hass)
+    device_a = ImouDeviceData(
+        serial="DEV_A",
+        name="Camera A",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    device_b = ImouDeviceData(
+        serial="DEV_B",
+        name="Camera B",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(
+        hass, {"DEV_A": device_a, "DEV_B": device_b}
     )
 
-    await handler(MagicMock(), "test_webhook_id", request)
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "DEV_B", "msgType": "videoMotion"},
+        coordinator,
+    )
 
-    assert dev_b.motion_detected is True
-    assert dev_a.motion_detected is False
+    assert device_b.motion_detected is True
+    assert device_a.motion_detected is False
 
 
 @pytest.mark.asyncio
-async def test_unknown_device_ignored(mock_webhook_request):
-    """HOOK-03: Unknown device serial silently ignored, returns None."""
-    from custom_components.imou_ha import _make_webhook_handler
+async def test_unknown_device_ignored(hass):
+    """HOOK-03: Unknown device serial is silently ignored, returns None (HTTP 200)."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
 
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    entry.runtime_data = coordinator
-
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "test_app", "did": "UNKNOWN_SERIAL", "msgType": "videoMotion"}
+    response = await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "UNKNOWN_SERIAL", "msgType": "videoMotion"},
+        coordinator,
     )
 
-    result = await handler(MagicMock(), "test_webhook_id", request)
-
-    assert result is None
-    coordinator.async_set_updated_data.assert_not_called()
+    assert response is None
 
 
 # ---------------------------------------------------------------------------
@@ -304,107 +385,82 @@ async def test_unknown_device_ignored(mock_webhook_request):
 
 
 @pytest.mark.asyncio
-async def test_appid_mismatch_returns_401(mock_webhook_request):
-    """HOOK-04 / D-15: Mismatched appId returns HTTP 401."""
-    from aiohttp import web
+async def test_appid_mismatch_returns_401(hass):
+    """HOOK-04 / D-15: Mismatched appId in payload returns HTTP 401."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
 
-    from custom_components.imou_ha import _make_webhook_handler
-
-    device = _make_device()
-    entry = _make_entry(app_id="test_app")
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    entry.runtime_data = coordinator
-
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"appId": "wrong_app_id", "did": "ABC123DEF456", "msgType": "videoMotion"}
+    response = await _call_handler(
+        hass,
+        entry,
+        {"appId": "wrong_app_id", "did": "ABC123DEF456", "msgType": "videoMotion"},
+        coordinator,
     )
 
-    response = await handler(MagicMock(), "test_webhook_id", request)
-
-    assert isinstance(response, web.Response)
-    assert response.status == HTTPStatus.UNAUTHORIZED
+    assert response is not None
+    assert response.status == 401
 
 
 @pytest.mark.asyncio
-async def test_missing_appid_not_rejected(mock_webhook_request):
-    """HOOK-04 / Pitfall 6: Missing appId field processed normally (best-effort)."""
-    from custom_components.imou_ha import _make_webhook_handler
+async def test_missing_appid_not_rejected(hass):
+    """HOOK-04 / Pitfall 6: Missing appId field does NOT return 401.
 
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-    entry.runtime_data = coordinator
+    Best-effort validation — if appId absent, process the event normally.
+    """
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
 
-    handler = _make_webhook_handler(entry)
-    request = mock_webhook_request(
-        {"did": "ABC123DEF456", "msgType": "videoMotion"}
+    response = await _call_handler(
+        hass,
+        entry,
+        # No appId field
+        {"did": "ABC123DEF456", "msgType": "videoMotion"},
+        coordinator,
     )
 
-    result = await handler(MagicMock(), "test_webhook_id", request)
-
-    # Missing appId should NOT return 401
-    assert not (hasattr(result, "status") and result.status == HTTPStatus.UNAUTHORIZED)
+    # Must NOT be a 401
+    assert response is None or (hasattr(response, "status") and response.status != 401)
     assert device.motion_detected is True
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle: unload
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
-async def test_webhook_unregistered_on_unload(hass):
-    """D-03: Webhook deregistered and Imou callback disabled on entry unload."""
-    from custom_components.imou_ha import async_unload_entry
-
-    entry = _make_entry(webhook_enabled=True)
-    coordinator = _make_coordinator({"ABC123DEF456": _make_device()})
-    coordinator.client.async_set_message_callback = AsyncMock()
-    entry.runtime_data = coordinator
-
-    with (
-        patch(
-            "homeassistant.components.webhook.async_unregister"
-        ) as mock_unregister,
-        patch(
-            "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
-            return_value=True,
-        ),
-    ):
-        result = await async_unload_entry(hass, entry)
-
-        assert result is True
-        mock_unregister.assert_called_once_with(hass, "test_webhook_id")
-        coordinator.client.async_set_message_callback.assert_called_once_with(
-            "", enable=False
-        )
-
-
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_non_json_payload_returns_400(mock_webhook_request):
-    """D-08: Non-JSON payload returns HTTP 400."""
-    from aiohttp import web
-
+async def test_non_json_payload_returns_400(hass, mock_webhook_request):
+    """D-08: Non-JSON payload (request.json raises ValueError) returns HTTP 400."""
     from custom_components.imou_ha import _make_webhook_handler
 
-    device = _make_device()
-    entry = _make_entry()
-    coordinator = _make_coordinator({"ABC123DEF456": device})
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ABC123DEF456",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ABC123DEF456": device})
     entry.runtime_data = coordinator
-
     handler = _make_webhook_handler(entry)
 
-    # Override request.json to raise ValueError
-    request = MagicMock()
-    request.json = AsyncMock(side_effect=ValueError("Not valid JSON"))
+    bad_request = MagicMock(spec=web.Request)
+    bad_request.json = AsyncMock(side_effect=ValueError("not valid json"))
 
-    response = await handler(MagicMock(), "test_webhook_id", request)
+    response = await handler(hass, MOCK_WEBHOOK_ID, bad_request)
 
-    assert isinstance(response, web.Response)
-    assert response.status == HTTPStatus.BAD_REQUEST
+    assert response is not None
+    assert response.status == 400

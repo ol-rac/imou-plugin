@@ -52,7 +52,8 @@ def _make_webhook_handler(entry: ImouHaConfigEntry):
         received_app_id = payload.get("appId")
         if received_app_id and received_app_id != entry.data[CONF_APP_ID]:
             _LOGGER.warning(
-                "Imou webhook: AppId mismatch (received=%s), rejecting", received_app_id
+                "Imou webhook: AppId mismatch (received=%s), rejecting",
+                received_app_id,
             )
             return web.Response(status=HTTPStatus.UNAUTHORIZED)
 
@@ -82,7 +83,9 @@ def _make_webhook_handler(entry: ImouHaConfigEntry):
             )
         else:
             _LOGGER.debug(
-                "Imou webhook: unrecognized msgType '%s' for %s", msg_type, device_serial
+                "Imou webhook: unrecognized msgType '%s' for %s",
+                msg_type,
+                device_serial,
             )
 
         return None
@@ -160,4 +163,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouHaConfigEntry) -> b
                 )
             except ImouError:
                 pass  # Best effort deregistration
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
