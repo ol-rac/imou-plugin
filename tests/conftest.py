@@ -1,5 +1,7 @@
 """Shared test fixtures for imou_ha tests."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
@@ -16,3 +18,16 @@ def sample_device_data() -> ImouDeviceData:
         status=DeviceStatus.ACTIVE,
         capabilities={"Dormant", "closedCamera", "MobileDetect"},
     )
+
+
+@pytest.fixture
+def mock_imou_api_client(sample_device_data: ImouDeviceData) -> AsyncMock:
+    """Return a mock ImouApiClient."""
+    client = AsyncMock()
+    client.async_validate_credentials = AsyncMock()
+    client.async_get_devices = AsyncMock(
+        return_value={
+            "ABC123DEF456": sample_device_data,
+        }
+    )
+    return client
