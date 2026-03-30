@@ -54,6 +54,12 @@
     "binary_sensor": {
       "online": {
         "name": "Online"
+      },
+      "motion": {
+        "name": "Movimento"
+      },
+      "human_detection": {
+        "name": "Rilevamento persona"
       }
     }
   }
