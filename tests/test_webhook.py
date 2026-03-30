@@ -89,9 +89,7 @@ async def test_webhook_registered_on_setup(hass):
     entry = _create_mock_entry(hass, options={OPT_WEBHOOK_ENABLED: True})
 
     mock_client = AsyncMock()
-    mock_coordinator = MagicMock(spec=ImouCoordinator)
-    mock_coordinator.client = mock_client
-    mock_coordinator.data = {"ABC123DEF456": SAMPLE_DEVICE}
+    mock_client.async_set_message_callback = AsyncMock()
 
     with (
         patch("custom_components.imou_ha.ImouApiClient", return_value=mock_client),
@@ -107,12 +105,6 @@ async def test_webhook_registered_on_setup(hass):
         patch(
             "custom_components.imou_ha.webhook.async_generate_url",
             return_value="https://ha.example.com/api/webhook/" + MOCK_WEBHOOK_ID,
-        ),
-        patch.object(
-            ImouCoordinator,
-            "client",
-            new_callable=lambda: property(lambda self: mock_client),
-            create=True,
         ),
     ):
         result = await hass.config_entries.async_setup(entry.entry_id)
