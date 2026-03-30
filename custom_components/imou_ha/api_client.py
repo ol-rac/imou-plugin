@@ -207,6 +207,88 @@ class ImouApiClient:
         except ImouException as err:
             raise ImouError(str(err)) from err
 
+    async def async_get_privacy_mode(self, device_id: str) -> bool:
+        """Get privacy mode (closedCamera) status via /openapi/getDeviceCameraStatus.
+
+        Returns:
+            True when privacy mode is ON (camera closed), False when OFF.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            data = await self._device_manager.async_get_device_camera_status(device_id)
+            # Returns dict with "status": "close" (on) or "open" (off)
+            return str(data.get("status", "open")) == "close"
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_set_privacy_mode(self, device_id: str, enabled: bool) -> None:
+        """Set privacy mode (closedCamera) via /openapi/setDeviceCameraStatus.
+
+        Args:
+            device_id: Device serial number.
+            enabled: True to close camera (privacy ON), False to open camera (privacy OFF).
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        # "close" = privacy ON (camera closed), "open" = privacy OFF (camera open)
+        status = "close" if enabled else "open"
+        try:
+            await self._device_manager.async_set_device_camera_status(device_id, status)
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_get_alarm_status(
+        self, device_id: str, begin_time: str, end_time: str
+    ) -> tuple[bool, bool]:
+        """Get alarm status (motion/human detection) for a device.
+
+        Args:
+            device_id: Device serial number.
+            begin_time: Start of time window (ISO8601 format).
+            end_time: End of time window (ISO8601 format).
+
+        Returns:
+            (motion_detected, human_detected) — both booleans.
+
+        Raises:
+            ImouDeviceSleepingError: when device is sleeping (DV1030).
+            ImouDeviceOfflineError: when device is offline (DV1007).
+            ImouError: for any other failure.
+        """
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            data = await self._device_manager.async_get_device_alarm_message(
+                device_id, begin_time, end_time
+            )
+            alarms = data.get("alarms", [])
+            motion_detected = any(
+                a.get("alarmType") == "motionDetect" for a in alarms
+            )
+            human_detected = any(
+                a.get("alarmType") in ("humanDetect", "humanoid") for a in alarms
+            )
+            return motion_detected, human_detected
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
     def _translate_exception(self, err: RequestFailedException) -> ImouError:
         """Translate a RequestFailedException to a domain-specific ImouError.
 

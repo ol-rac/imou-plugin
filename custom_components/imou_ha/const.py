@@ -34,7 +34,7 @@ DEFAULT_SCAN_INTERVAL = 60
 MIN_SCAN_INTERVAL = 30
 
 # Platforms to forward
-PLATFORMS: list[str] = ["sensor", "binary_sensor"]
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "camera", "switch"]
 
 # Sleep-aware polling: max wake-check frequency for sleeping/offline devices (D-10)
 SLEEP_CHECK_INTERVAL = 300  # seconds — max wake-check frequency for sleeping devices (D-10)
