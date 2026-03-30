@@ -36,5 +36,25 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "device_state": {
+        "name": "Device state",
+        "state": {
+          "active": "Active",
+          "sleeping": "Sleeping",
+          "offline": "Offline"
+        }
+      },
+      "battery": {
+        "name": "Battery"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
+    }
   }
 }
