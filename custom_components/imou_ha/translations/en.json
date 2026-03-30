@@ -32,7 +32,8 @@
           "app_id": "AppId",
           "app_secret": "AppSecret",
           "api_url": "Region",
-          "scan_interval": "Polling interval (seconds)"
+          "scan_interval": "Polling interval (seconds)",
+          "webhook_enabled": "Enable webhook for instant event detection"
         }
       }
     }

@@ -6,8 +6,11 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.webhook import async_generate_id
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.const import CONF_WEBHOOK_ID
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -25,6 +28,7 @@ from .const import (
     DOMAIN,
     MIN_SCAN_INTERVAL,
     OPT_SCAN_INTERVAL,
+    OPT_WEBHOOK_ENABLED,
     REGIONAL_ENDPOINTS,
 )
 from .exceptions import ImouAuthError, ImouError, ImouLicenseError
@@ -162,6 +166,14 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle options form (per D-06, D-07, D-08)."""
         if user_input is not None:
+            # Generate and persist webhook_id on first enable (D-04)
+            if user_input.get(OPT_WEBHOOK_ENABLED, False):
+                new_data = dict(self.config_entry.data)
+                if CONF_WEBHOOK_ID not in new_data:
+                    new_data[CONF_WEBHOOK_ID] = async_generate_id()
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=new_data
+                    )
             # Schedule reload so the new options take effect immediately (per D-07)
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
             return self.async_create_entry(data=user_input)
@@ -174,6 +186,7 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Required(
                     OPT_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL,
                 ): vol.All(int, vol.Range(min=MIN_SCAN_INTERVAL)),
+                vol.Optional(OPT_WEBHOOK_ENABLED, default=False): BooleanSelector(),
             },
         )
 
