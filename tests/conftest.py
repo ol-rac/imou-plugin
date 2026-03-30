@@ -1,8 +1,10 @@
 """Shared test fixtures for imou_ha tests."""
 
-from unittest.mock import AsyncMock
+import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiohttp import web
 
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
@@ -48,6 +50,18 @@ def battery_device_data() -> ImouDeviceData:
         battery_level=85,
         battery_power_source="battery",
     )
+
+
+@pytest.fixture
+def mock_webhook_request():
+    """Factory fixture returning a mock aiohttp.web.Request with given JSON payload."""
+
+    def _make_request(payload: dict) -> web.Request:
+        request = MagicMock(spec=web.Request)
+        request.json = AsyncMock(return_value=payload)
+        return request
+
+    return _make_request
 
 
 @pytest.fixture
