@@ -36,6 +36,21 @@ def sample_device_data() -> ImouDeviceData:
 
 
 @pytest.fixture
+def battery_device_data() -> ImouDeviceData:
+    """Return a sample ImouDeviceData with Electric capability."""
+    return ImouDeviceData(
+        serial="BAT789GHI012",
+        name="Garden Camera",
+        model="IPC-B26EP",
+        firmware="2.840.0000000.28.R",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"Dormant", "Electric", "closedCamera"},
+        battery_level=85,
+        battery_power_source="battery",
+    )
+
+
+@pytest.fixture
 def mock_imou_api_client(sample_device_data: ImouDeviceData) -> AsyncMock:
     """Return a mock ImouApiClient."""
     client = AsyncMock()
