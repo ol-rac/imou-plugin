@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.1 (2026-03-31)
+
+### Bug Fixes
+
+- Call closeDormant API directly without channel_id
+  ([`b2022ab`](https://github.com/ol-rac/imou-plugin/commit/b2022abc2cbd5b3709f4d81925aa20a2d0055fd1))
+
+
 ## v0.4.0 (2026-03-31)
 
 ### Features
