@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.5.2 (2026-03-31)
+
+### Bug Fixes
+
+- Increase wake-up retries from 3 to 5
+  ([`f513408`](https://github.com/ol-rac/imou-plugin/commit/f513408359c7246b13a24ec38c606c9bed724be5))
+
+
 ## v0.5.1 (2026-03-31)
 
 ### Bug Fixes
