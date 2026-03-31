@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.3 (2026-03-31)
+
+### Bug Fixes
+
+- Add channelId to closeDormant call (matches imou_life)
+  ([`768f931`](https://github.com/ol-rac/imou-plugin/commit/768f9312f738703c0843b06e0b08b352b93e4710))
+
+
 ## v0.4.2 (2026-03-31)
 
 ### Bug Fixes
