@@ -102,6 +102,8 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
                 )
                 if status == DeviceStatus.ACTIVE:
                     _LOGGER.debug("Device %s is ACTIVE after wake", self._device_serial)
+                    self.device_data.status = DeviceStatus.ACTIVE
+                    self.coordinator.async_set_updated_data(self.coordinator.data)
                     await self.coordinator.async_request_refresh()
                     return True
             except ImouError as err:

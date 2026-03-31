@@ -68,8 +68,9 @@ class ImouWakeUpButton(ImouEntity, ButtonEntity):
             )
             try:
                 await self.coordinator.client.async_wake_up_via_dormant(self._device_serial)
+                _LOGGER.warning("closeDormant call OK for %s", self._device_serial)
             except ImouError as err:
-                _LOGGER.debug("closeDormant call error (non-fatal): %s", err)
+                _LOGGER.warning("closeDormant call error: %s", err)
 
             await asyncio.sleep(WAKE_UP_VERIFY_DELAY_SECONDS)
 
@@ -79,6 +80,8 @@ class ImouWakeUpButton(ImouEntity, ButtonEntity):
                 )
                 if status == DeviceStatus.ACTIVE:
                     _LOGGER.debug("Device %s is ACTIVE after wake", self._device_serial)
+                    self.device_data.status = DeviceStatus.ACTIVE
+                    self.coordinator.async_set_updated_data(self.coordinator.data)
                     await self.coordinator.async_request_refresh()
                     return True
             except ImouError as err:
@@ -92,5 +95,8 @@ class ImouWakeUpButton(ImouEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Wake up the battery camera via closeDormant with status verification (D-10, D-12)."""
-        if not await self._async_wake_and_verify():
+        _LOGGER.warning("Wake up button pressed for %s", self._device_serial)
+        if await self._async_wake_and_verify():
+            _LOGGER.warning("Wake up succeeded for %s", self._device_serial)
+        else:
             _LOGGER.warning("Wake up failed for %s", self._device_serial)
