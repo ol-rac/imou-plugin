@@ -69,7 +69,7 @@ ENABLE_TYPE_CLOSE_DORMANT = "closeDormant"
 
 # Wake-up timing for battery cameras (D-03; 5s empirically confirmed on Cell 2)
 WAKE_UP_VERIFY_DELAY_SECONDS = 5
-WAKE_UP_MAX_RETRIES = 3
+WAKE_UP_MAX_RETRIES = 5
 
 # Live stream error codes
 ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
