@@ -1,11 +1,11 @@
 {
   "domain": "imou_ha",
   "name": "Imou",
-  "version": "1.0.0",
-  "config_flow": true,
-  "iot_class": "cloud_polling",
-  "requirements": ["pyimouapi>=1.2.2"],
   "codeowners": ["@ol-rac"],
+  "config_flow": true,
   "documentation": "https://github.com/ol-rac/imou-plugin",
-  "issue_tracker": "https://github.com/ol-rac/imou-plugin/issues"
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ol-rac/imou-plugin/issues",
+  "requirements": ["pyimouapi>=1.2.2"],
+  "version": "0.1.0"
 }

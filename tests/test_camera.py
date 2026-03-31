@@ -327,8 +327,10 @@ class TestImouCamera:
         await camera.stream_source()
 
         # Simulate TTL expiry by backdating the cache timestamp
+        import time
+
         cached_url, _ts = camera._stream_url_cache["hd"]
-        camera._stream_url_cache["hd"] = (cached_url, 0.0)  # timestamp far in the past
+        camera._stream_url_cache["hd"] = (cached_url, time.monotonic() - 301)  # past TTL (300s)
 
         await camera.stream_source()
 
