@@ -53,6 +53,10 @@ class ImouWakeUpDormantButton(ImouEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Wake up the device via closeDormant."""
         _LOGGER.warning(
+            "TEST: Device %s capabilities: %s",
+            self._device_serial, self.device_data.capabilities,
+        )
+        _LOGGER.warning(
             "TEST: Sending closeDormant wake-up to %s", self._device_serial,
         )
         try:
