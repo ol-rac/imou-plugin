@@ -25,24 +25,25 @@ async def async_setup_entry(
     entry: ImouHaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Imou button entities — wake up for battery cameras only."""
+    """Set up Imou button entities — two wake methods for battery cameras."""
     coordinator: ImouCoordinator = entry.runtime_data
     entities = []
     for serial, device in coordinator.data.items():
         if CAPABILITY_DORMANT in device.capabilities:
-            entities.append(ImouWakeUpButton(coordinator, serial))
+            entities.append(ImouWakeUpDormantButton(coordinator, serial))
+            entities.append(ImouWakeUpApiButton(coordinator, serial))
     async_add_entities(entities)
 
 
-class ImouWakeUpButton(ImouEntity, ButtonEntity):
-    """Wake up button for battery-powered Imou cameras."""
+class ImouWakeUpDormantButton(ImouEntity, ButtonEntity):
+    """Wake up via closeDormant (imou_life method)."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "wake_up"
+    _attr_translation_key = "wake_up_dormant"
 
     def __init__(self, coordinator: ImouCoordinator, device_serial: str) -> None:
-        """Initialise wake up button."""
-        super().__init__(coordinator, device_serial, "wake_up")
+        """Initialise wake up dormant button."""
+        super().__init__(coordinator, device_serial, "wake_up_dormant")
 
     @property
     def available(self) -> bool:
@@ -50,9 +51,47 @@ class ImouWakeUpButton(ImouEntity, ButtonEntity):
         return self._device_serial in (self.coordinator.data or {})
 
     async def async_press(self) -> None:
-        """Wake up the device."""
+        """Wake up the device via closeDormant."""
+        _LOGGER.warning(
+            "TEST: Sending closeDormant wake-up to %s", self._device_serial,
+        )
+        try:
+            await self.coordinator.client.async_wake_up_via_dormant(self._device_serial)
+            status = await self.coordinator.client.async_get_device_online_status(self._device_serial)
+            _LOGGER.warning(
+                "TEST: closeDormant sent to %s — device status after: %s",
+                self._device_serial, status.value,
+            )
+        except ImouError as err:
+            _LOGGER.warning("TEST: closeDormant FAILED for %s: %s", self._device_serial, err)
+
+
+class ImouWakeUpApiButton(ImouEntity, ButtonEntity):
+    """Wake up via wakeUpDevice API endpoint."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "wake_up_api"
+
+    def __init__(self, coordinator: ImouCoordinator, device_serial: str) -> None:
+        """Initialise wake up API button."""
+        super().__init__(coordinator, device_serial, "wake_up_api")
+
+    @property
+    def available(self) -> bool:
+        """Always available — the whole point is to wake sleeping devices."""
+        return self._device_serial in (self.coordinator.data or {})
+
+    async def async_press(self) -> None:
+        """Wake up the device via wakeUpDevice API."""
+        _LOGGER.warning(
+            "TEST: Sending wakeUpDevice to %s", self._device_serial,
+        )
         try:
             await self.coordinator.client.async_wake_up_device(self._device_serial)
-            _LOGGER.info("Wake-up command sent to %s", self._device_serial)
+            status = await self.coordinator.client.async_get_device_online_status(self._device_serial)
+            _LOGGER.warning(
+                "TEST: wakeUpDevice sent to %s — device status after: %s",
+                self._device_serial, status.value,
+            )
         except ImouError as err:
-            _LOGGER.warning("Failed to wake device %s: %s", self._device_serial, err)
+            _LOGGER.warning("TEST: wakeUpDevice FAILED for %s: %s", self._device_serial, err)

@@ -20,6 +20,7 @@ from .const import (
     CAPABILITY_DORMANT,
     CHANNEL_DEFAULT,
     ENABLE_TYPE_CLOSE_CAMERA,
+    ENABLE_TYPE_CLOSE_DORMANT,
     ERROR_CODE_DEVICE_OFFLINE,
     ERROR_CODE_DEVICE_SLEEPING,
     ERROR_CODE_LICENSE_LIMIT,
@@ -403,9 +404,6 @@ class ImouApiClient:
     async def async_wake_up_device(self, device_id: str) -> None:
         """Wake up a sleeping/dormant device via /openapi/wakeUpDevice.
 
-        Battery cameras go to sleep between events. This call wakes the device
-        so that subsequent commands (e.g. privacy toggle) can be processed.
-
         Raises:
             ImouError: for any failure.
 
@@ -415,6 +413,28 @@ class ImouApiClient:
             self._device_manager = ImouDeviceManager(self._client)
         try:
             await self._device_manager.async_wake_up_device(device_id)
+        except RequestFailedException as err:
+            raise self._translate_exception(err) from err
+        except ImouException as err:
+            raise ImouError(str(err)) from err
+
+    async def async_wake_up_via_dormant(self, device_id: str) -> None:
+        """Wake up a sleeping device via setDeviceCameraStatus(closeDormant=True).
+
+        This is the method used by imou_life — sends closeDormant through the same
+        setDeviceCameraStatus API that controls camera features.
+
+        Raises:
+            ImouError: for any failure.
+
+        """
+        self._increment_budget()
+        if self._device_manager is None:
+            self._device_manager = ImouDeviceManager(self._client)
+        try:
+            await self._device_manager.async_set_device_status(
+                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_DORMANT, enabled=True,
+            )
         except RequestFailedException as err:
             raise self._translate_exception(err) from err
         except ImouException as err:

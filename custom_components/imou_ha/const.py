@@ -65,6 +65,7 @@ CHANNEL_DEFAULT = "0"
 
 # Privacy mode (closeCamera) enable type constant (pyimouapi pattern)
 ENABLE_TYPE_CLOSE_CAMERA = "closeCamera"
+ENABLE_TYPE_CLOSE_DORMANT = "closeDormant"
 
 # Live stream error codes
 ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
