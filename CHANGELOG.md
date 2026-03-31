@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.2 (2026-03-31)
+
+### Bug Fixes
+
+- Log device capabilities in wake-up test button
+  ([`c65d9a7`](https://github.com/ol-rac/imou-plugin/commit/c65d9a7704dffb588656a2f3980eba0499ba07d6))
+
+
 ## v0.4.1 (2026-03-31)
 
 ### Bug Fixes
