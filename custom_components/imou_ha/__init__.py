@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -37,7 +38,7 @@ def _make_webhook_handler(entry: ImouHaConfigEntry):
     """Create a webhook handler bound to the given config entry."""
 
     async def _async_handle_webhook(
-        hass: HomeAssistant, webhook_id: str, request: web.Request
+        hass: HomeAssistant, webhook_id: str, request: web.Request,
     ) -> web.Response | None:
         """Process an incoming Imou push event (HOOK-02)."""
         try:
@@ -79,7 +80,7 @@ def _make_webhook_handler(entry: ImouHaConfigEntry):
             coordinator.async_set_updated_data(coordinator.data)
         elif msg_type == "deviceStatus":
             _LOGGER.debug(
-                "Imou webhook: deviceStatus event for %s: %s", device_serial, payload
+                "Imou webhook: deviceStatus event for %s: %s", device_serial, payload,
             )
         else:
             _LOGGER.debug(
@@ -122,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouHaConfigEntry) -> bo
                 webhook_url = webhook.async_generate_url(hass, wh_id)
             except NoURLAvailableError:
                 _LOGGER.warning(
-                    "Cannot register Imou webhook: HA external URL not configured"
+                    "Cannot register Imou webhook: HA external URL not configured",
                 )
                 webhook_url = None
 
@@ -137,11 +138,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouHaConfigEntry) -> bo
                 )
                 try:
                     await coordinator.client.async_set_message_callback(
-                        webhook_url, enable=True
+                        webhook_url, enable=True,
                     )
                 except ImouError as err:
                     _LOGGER.warning(
-                        "Imou webhook registration failed, using polling only: %s", err
+                        "Imou webhook registration failed, using polling only: %s", err,
                     )
                     webhook.async_unregister(hass, wh_id)
 
@@ -157,11 +158,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouHaConfigEntry) -> b
     if webhook_id:
         webhook.async_unregister(hass, webhook_id)
         if entry.options.get(OPT_WEBHOOK_ENABLED, False):
-            try:
+            with contextlib.suppress(ImouError):
                 await entry.runtime_data.client.async_set_message_callback(
-                    "", enable=False
+                    "", enable=False,
                 )
-            except ImouError:
-                pass  # Best effort deregistration
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

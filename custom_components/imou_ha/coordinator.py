@@ -6,7 +6,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from homeassistant.components.persistent_notification import async_create as pn_create, async_dismiss as pn_dismiss
+from homeassistant.components.persistent_notification import async_create as pn_create
+from homeassistant.components.persistent_notification import async_dismiss as pn_dismiss
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -28,7 +29,12 @@ from .const import (
     THROTTLE_CRITICAL_PCT,
     THROTTLE_WARN_PCT,
 )
-from .exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
+from .exceptions import (
+    ImouAuthError,
+    ImouDeviceOfflineError,
+    ImouDeviceSleepingError,
+    ImouError,
+)
 from .models import DeviceStatus, ImouDeviceData
 
 if TYPE_CHECKING:
@@ -199,7 +205,7 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
             new_status = await self.client.async_get_device_online_status(serial)
             if new_status != device.status:
                 _LOGGER.info(
-                    "Device %s status changed: %s -> %s", serial, device.status.value, new_status.value
+                    "Device %s status changed: %s -> %s", serial, device.status.value, new_status.value,
                 )
                 device.status = new_status
         except ImouDeviceSleepingError:

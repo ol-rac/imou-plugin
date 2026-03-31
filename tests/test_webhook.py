@@ -8,8 +8,8 @@ import pytest
 from aiohttp import web
 
 from custom_components.imou_ha.const import (
-    CONF_APP_ID,
     CONF_API_URL,
+    CONF_APP_ID,
     CONF_APP_SECRET,
     DEFAULT_API_URL,
     DOMAIN,
@@ -100,7 +100,7 @@ async def test_webhook_registered_on_setup(hass):
         ),
         patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch(
-            "custom_components.imou_ha.webhook.async_register"
+            "custom_components.imou_ha.webhook.async_register",
         ) as mock_register,
         patch(
             "custom_components.imou_ha.webhook.async_generate_url",
@@ -132,7 +132,7 @@ async def test_webhook_not_registered_when_disabled(hass):
         ),
         patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch(
-            "custom_components.imou_ha.webhook.async_register"
+            "custom_components.imou_ha.webhook.async_register",
         ) as mock_register,
     ):
         result = await hass.config_entries.async_setup(entry.entry_id)
@@ -152,7 +152,7 @@ async def test_webhook_registration_failure_continues(hass):
 
     mock_client = AsyncMock()
     mock_client.async_set_message_callback = AsyncMock(
-        side_effect=ImouError("Imou callback failed")
+        side_effect=ImouError("Imou callback failed"),
     )
 
     with (
@@ -164,10 +164,10 @@ async def test_webhook_registration_failure_continues(hass):
         ),
         patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch(
-            "custom_components.imou_ha.webhook.async_register"
+            "custom_components.imou_ha.webhook.async_register",
         ),
         patch(
-            "custom_components.imou_ha.webhook.async_unregister"
+            "custom_components.imou_ha.webhook.async_unregister",
         ) as mock_unregister,
         patch(
             "custom_components.imou_ha.webhook.async_generate_url",
@@ -204,7 +204,7 @@ async def test_webhook_unregistered_on_unload(hass):
         patch.object(ImouCoordinator, "_async_setup", new_callable=AsyncMock),
         patch("custom_components.imou_ha.webhook.async_register"),
         patch(
-            "custom_components.imou_ha.webhook.async_unregister"
+            "custom_components.imou_ha.webhook.async_unregister",
         ) as mock_unregister,
         patch(
             "custom_components.imou_ha.webhook.async_generate_url",
@@ -341,7 +341,7 @@ async def test_device_routing_by_did(hass):
         capabilities=set(),
     )
     coordinator = _make_coordinator_with_devices(
-        hass, {"DEV_A": device_a, "DEV_B": device_b}
+        hass, {"DEV_A": device_a, "DEV_B": device_b},
     )
 
     await _call_handler(

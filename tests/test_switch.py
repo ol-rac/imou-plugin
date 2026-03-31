@@ -12,7 +12,6 @@ from custom_components.imou_ha.exceptions import (
 )
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -260,7 +259,7 @@ async def test_sleeping_device_leaves_state_unchanged() -> None:
     device = _make_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_set_privacy_mode = AsyncMock(
-        side_effect=ImouDeviceSleepingError("DV1030:sleeping")
+        side_effect=ImouDeviceSleepingError("DV1030:sleeping"),
     )
 
     switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
@@ -285,7 +284,7 @@ async def test_offline_device_leaves_state_unchanged() -> None:
     device = _make_privacy_device(privacy_enabled=True)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_set_privacy_mode = AsyncMock(
-        side_effect=ImouDeviceOfflineError("DV1007:offline")
+        side_effect=ImouDeviceOfflineError("DV1007:offline"),
     )
 
     switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
@@ -334,7 +333,7 @@ async def test_device_offline_during_verification_breaks_loop() -> None:
     coordinator = _make_coordinator({"ABC123DEF456": device})
     # Raises offline error during poll
     coordinator.client.async_get_privacy_mode = AsyncMock(
-        side_effect=ImouDeviceOfflineError("DV1007:offline during verification")
+        side_effect=ImouDeviceOfflineError("DV1007:offline during verification"),
     )
 
     switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
@@ -379,7 +378,7 @@ async def test_verification_succeeds_on_second_retry() -> None:
 @pytest.mark.asyncio
 async def test_verify_max_retries_count() -> None:
     """Test that verification polls exactly VERIFY_MAX_RETRIES times on timeout."""
-    from custom_components.imou_ha.switch import ImouPrivacySwitch, VERIFY_MAX_RETRIES
+    from custom_components.imou_ha.switch import VERIFY_MAX_RETRIES, ImouPrivacySwitch
 
     device = _make_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})

@@ -7,12 +7,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE
-from homeassistant.components.sensor import RestoreSensor
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -23,6 +23,7 @@ from .models import DeviceStatus
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
     from .coordinator import ImouCoordinator, ImouHaConfigEntry
 
 _LOGGER = logging.getLogger(__name__)

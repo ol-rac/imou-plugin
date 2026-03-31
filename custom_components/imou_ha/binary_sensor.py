@@ -23,6 +23,7 @@ from .models import DeviceStatus
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
     from .coordinator import ImouCoordinator, ImouHaConfigEntry
 
 _LOGGER = logging.getLogger(__name__)

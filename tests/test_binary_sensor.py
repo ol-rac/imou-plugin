@@ -8,13 +8,13 @@ import pytest
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 
+from custom_components.imou_ha.binary_sensor import (
+    ImouHumanDetectionSensor,
+    ImouMotionSensor,
+    ImouOnlineSensor,
+)
 from custom_components.imou_ha.coordinator import ImouCoordinator
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
-from custom_components.imou_ha.binary_sensor import (
-    ImouOnlineSensor,
-    ImouMotionSensor,
-    ImouHumanDetectionSensor,
-)
 
 SERIAL = "ABC123DEF456"
 
@@ -287,7 +287,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_motion_sensor_created_for_mobile_detect(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouMotionSensor is created for device with MobileDetect capability (D-06)."""
         device = _make_device(capabilities={"MobileDetect"})
@@ -297,7 +297,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_motion_sensor_created_for_alarm_md(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouMotionSensor is created for device with AlarmMD capability (D-06)."""
         device = _make_device(capabilities={"AlarmMD"})
@@ -307,7 +307,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_motion_sensor_not_created_without_motion_caps(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouMotionSensor is NOT created for device without motion capabilities (D-08)."""
         device = _make_device(capabilities={"CloseCamera", "Dormant"})
@@ -317,7 +317,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_human_sensor_created_for_header_detect(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouHumanDetectionSensor is created for device with HeaderDetect capability (D-07)."""
         device = _make_device(capabilities={"HeaderDetect"})
@@ -327,7 +327,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_human_sensor_created_for_ai_human(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouHumanDetectionSensor is created for device with AiHuman capability (D-07)."""
         device = _make_device(capabilities={"AiHuman"})
@@ -337,7 +337,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_human_sensor_created_for_smdh(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouHumanDetectionSensor is created for device with SMDH capability (D-07)."""
         device = _make_device(capabilities={"SMDH"})
@@ -347,7 +347,7 @@ class TestBinarySensorSetup:
 
     @pytest.mark.asyncio
     async def test_human_sensor_not_created_without_human_caps(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouHumanDetectionSensor is NOT created for device without human detection caps (D-08)."""
         device = _make_device(capabilities={"MobileDetect"})

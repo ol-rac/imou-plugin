@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from custom_components.imou_ha.budget import ImouBudgetState
 from custom_components.imou_ha.api_client import ImouApiClient
-
+from custom_components.imou_ha.budget import ImouBudgetState
 
 # ---------------------------------------------------------------------------
 # ImouBudgetState — initial state
@@ -271,7 +270,7 @@ class TestApiClientBudgetInstrumentation:
         client, budget = _make_client_with_budget()
         mock_dm = AsyncMock()
         mock_dm.async_get_device_online_status = AsyncMock(
-            return_value={"onLine": "1"}
+            return_value={"onLine": "1"},
         )
         client._device_manager = mock_dm
         await client.async_get_device_online_status("DEVICE123")
@@ -289,7 +288,7 @@ class TestApiClientBudgetInstrumentation:
         client, budget = _make_client_with_budget()
         mock_dm = AsyncMock()
         mock_dm.async_get_device_power_info = AsyncMock(
-            return_value={"electricitys": []}
+            return_value={"electricitys": []},
         )
         client._device_manager = mock_dm
         await client.async_get_device_power_info("DEVICE123")

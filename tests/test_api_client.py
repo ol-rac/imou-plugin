@@ -69,9 +69,8 @@ class TestAsyncValidateCredentials:
             client._client,
             "async_get_token",
             side_effect=InvalidAppIdOrSecretException("bad credentials"),
-        ):
-            with pytest.raises(ImouAuthError):
-                await client.async_validate_credentials()
+        ), pytest.raises(ImouAuthError):
+            await client.async_validate_credentials()
 
     async def test_connect_failed_raises_imou_error(self) -> None:
         from pyimouapi.exceptions import ConnectFailedException
@@ -81,9 +80,8 @@ class TestAsyncValidateCredentials:
             client._client,
             "async_get_token",
             side_effect=ConnectFailedException("network down"),
-        ):
-            with pytest.raises(ImouError):
-                await client.async_validate_credentials()
+        ), pytest.raises(ImouError):
+            await client.async_validate_credentials()
 
     async def test_connect_failed_not_raises_imou_auth_error(self) -> None:
         """ConnectFailedException must not be wrapped as ImouAuthError."""
@@ -94,9 +92,8 @@ class TestAsyncValidateCredentials:
             client._client,
             "async_get_token",
             side_effect=ConnectFailedException("network down"),
-        ):
-            with pytest.raises(ImouError) as exc_info:
-                await client.async_validate_credentials()
+        ), pytest.raises(ImouError) as exc_info:
+            await client.async_validate_credentials()
         assert not isinstance(exc_info.value, ImouAuthError)
 
     async def test_debug_logged_on_auth_error(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -128,7 +125,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -141,7 +138,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -157,7 +154,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device(device_ability="Dormant,CloseCamera")
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -168,7 +165,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device(device_status="1")
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -179,7 +176,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device(device_status="4", device_ability="")
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -192,7 +189,7 @@ class TestAsyncGetDevices:
         # device_status "0" (offline) but has Dormant capability -> sleeping
         mock_device = _make_mock_device(device_status="0", device_ability="Dormant")
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -203,7 +200,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device(device_ability="Dormant,CloseCamera,MobileDetect")
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -217,7 +214,7 @@ class TestAsyncGetDevices:
         client = _make_client()
         mock_device = _make_mock_device(device_ability=["Dormant", "CloseCamera"])
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(return_value=[mock_device])
             result = await client.async_get_devices()
@@ -229,10 +226,10 @@ class TestAsyncGetDevices:
 
         client = _make_client()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(
-                side_effect=RequestFailedException("FL1001:license limit reached")
+                side_effect=RequestFailedException("FL1001:license limit reached"),
             )
             with pytest.raises(ImouLicenseError):
                 await client.async_get_devices()
@@ -242,10 +239,10 @@ class TestAsyncGetDevices:
 
         client = _make_client()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(
-                side_effect=RequestFailedException("OP1011:rate limit exceeded")
+                side_effect=RequestFailedException("OP1011:rate limit exceeded"),
             )
             with pytest.raises(ImouRateLimitError):
                 await client.async_get_devices()
@@ -255,10 +252,10 @@ class TestAsyncGetDevices:
 
         client = _make_client()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(
-                side_effect=RequestFailedException("DV1007:device offline")
+                side_effect=RequestFailedException("DV1007:device offline"),
             )
             with pytest.raises(ImouDeviceOfflineError):
                 await client.async_get_devices()
@@ -268,10 +265,10 @@ class TestAsyncGetDevices:
 
         client = _make_client()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(
-                side_effect=RequestFailedException("DV1030:device sleeping")
+                side_effect=RequestFailedException("DV1030:device sleeping"),
             )
             with pytest.raises(ImouDeviceSleepingError):
                 await client.async_get_devices()
@@ -286,7 +283,7 @@ class TestAsyncGetDevices:
             RequestFailedException("UNKNOWN:err"),
         ]:
             with patch(
-                "custom_components.imou_ha.api_client.ImouDeviceManager"
+                "custom_components.imou_ha.api_client.ImouDeviceManager",
             ) as MockManager:
                 MockManager.return_value.async_get_devices = AsyncMock(side_effect=exc)
                 with pytest.raises(ImouError):
@@ -298,10 +295,10 @@ class TestAsyncGetDevices:
 
         client = _make_client()
         with patch(
-            "custom_components.imou_ha.api_client.ImouDeviceManager"
+            "custom_components.imou_ha.api_client.ImouDeviceManager",
         ) as MockManager:
             MockManager.return_value.async_get_devices = AsyncMock(
-                side_effect=ConnectFailedException("network down")
+                side_effect=ConnectFailedException("network down"),
             )
             with caplog.at_level(logging.DEBUG, logger="custom_components.imou_ha.api_client"):
                 with pytest.raises(ImouError):
@@ -345,10 +342,10 @@ class TestAlarmStatus:
         """alarm with type=1 only -> (True, False)."""
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            return_value={"alarms": [{"type": 1, "event": "MobileDetect"}]}
+            return_value={"alarms": [{"type": 1, "event": "MobileDetect"}]},
         )
         result = await client.async_get_alarm_status(
-            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
         )
         assert result == (True, False)
 
@@ -356,10 +353,10 @@ class TestAlarmStatus:
         """alarm with type=0 only -> (False, True)."""
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            return_value={"alarms": [{"type": 0, "event": "HumanDetect"}]}
+            return_value={"alarms": [{"type": 0, "event": "HumanDetect"}]},
         )
         result = await client.async_get_alarm_status(
-            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
         )
         assert result == (False, True)
 
@@ -371,11 +368,11 @@ class TestAlarmStatus:
                 "alarms": [
                     {"type": 1, "event": "MobileDetect"},
                     {"type": 0, "event": "HumanDetect"},
-                ]
-            }
+                ],
+            },
         )
         result = await client.async_get_alarm_status(
-            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
         )
         assert result == (True, True)
 
@@ -383,10 +380,10 @@ class TestAlarmStatus:
         """empty alarms array -> (False, False)."""
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            return_value={"alarms": []}
+            return_value={"alarms": []},
         )
         result = await client.async_get_alarm_status(
-            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
         )
         assert result == (False, False)
 
@@ -394,10 +391,10 @@ class TestAlarmStatus:
         """alarm with type=4 (accessory human body) -> (False, True)."""
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            return_value={"alarms": [{"type": 4, "event": "AccessoryHumanBody"}]}
+            return_value={"alarms": [{"type": 4, "event": "AccessoryHumanBody"}]},
         )
         result = await client.async_get_alarm_status(
-            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+            "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
         )
         assert result == (False, True)
 
@@ -407,11 +404,11 @@ class TestAlarmStatus:
 
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            side_effect=RequestFailedException("DV1030:Device is sleeping")
+            side_effect=RequestFailedException("DV1030:Device is sleeping"),
         )
         with pytest.raises(ImouDeviceSleepingError):
             await client.async_get_alarm_status(
-                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
             )
 
     async def test_dv1007_raises_offline_error(self) -> None:
@@ -420,11 +417,11 @@ class TestAlarmStatus:
 
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            side_effect=RequestFailedException("DV1007:device offline")
+            side_effect=RequestFailedException("DV1007:device offline"),
         )
         with pytest.raises(ImouDeviceOfflineError):
             await client.async_get_alarm_status(
-                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00"
+                "DEV123", "2026-03-30 10:00:00", "2026-03-30 10:05:00",
             )
 
     async def test_calls_get_alarm_message_endpoint(self) -> None:
@@ -455,7 +452,7 @@ class TestMessageCallback:
         client = _make_client()
         client._client.async_request_api = AsyncMock(return_value={})
         await client.async_set_message_callback(
-            "https://example.com/api/webhook/abc", enable=True
+            "https://example.com/api/webhook/abc", enable=True,
         )
 
         client._client.async_request_api.assert_awaited_once()
@@ -471,7 +468,7 @@ class TestMessageCallback:
         client = _make_client()
         client._client.async_request_api = AsyncMock(return_value={})
         await client.async_set_message_callback(
-            "https://example.com/api/webhook/abc", enable=False
+            "https://example.com/api/webhook/abc", enable=False,
         )
 
         client._client.async_request_api.assert_awaited_once()
@@ -488,11 +485,11 @@ class TestMessageCallback:
 
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            side_effect=RequestFailedException("DV1030:device sleeping")
+            side_effect=RequestFailedException("DV1030:device sleeping"),
         )
         with pytest.raises(ImouDeviceSleepingError):
             await client.async_set_message_callback(
-                "https://example.com/api/webhook/abc", enable=True
+                "https://example.com/api/webhook/abc", enable=True,
             )
 
     async def test_set_message_callback_translates_imou_exception(self) -> None:
@@ -501,18 +498,18 @@ class TestMessageCallback:
 
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            side_effect=ImouException("generic error")
+            side_effect=ImouException("generic error"),
         )
         with pytest.raises(ImouError):
             await client.async_set_message_callback(
-                "https://example.com/api/webhook/abc", enable=True
+                "https://example.com/api/webhook/abc", enable=True,
             )
 
     async def test_get_message_callback_calls_correct_endpoint(self) -> None:
         """async_get_message_callback calls /openapi/getMessageCallback with empty params."""
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            return_value={"callbackUrl": "https://example.com/api/webhook/abc", "status": "on"}
+            return_value={"callbackUrl": "https://example.com/api/webhook/abc", "status": "on"},
         )
         result = await client.async_get_message_callback()
 
@@ -528,7 +525,7 @@ class TestMessageCallback:
 
         client = _make_client()
         client._client.async_request_api = AsyncMock(
-            side_effect=RequestFailedException("OP1011:rate limit")
+            side_effect=RequestFailedException("OP1011:rate limit"),
         )
         with pytest.raises(ImouRateLimitError):
             await client.async_get_message_callback()

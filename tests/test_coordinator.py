@@ -8,25 +8,27 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.imou_ha.budget import ImouBudgetState
 from custom_components.imou_ha.const import (
+    DEFAULT_RESERVE_SIZE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MONTHLY_API_LIMIT,
-    DEFAULT_RESERVE_SIZE,
     SLEEP_CHECK_INTERVAL,
 )
 from custom_components.imou_ha.coordinator import ImouCoordinator
 from custom_components.imou_ha.entity import ImouEntity
-from custom_components.imou_ha.exceptions import ImouAuthError, ImouDeviceOfflineError, ImouDeviceSleepingError, ImouError
+from custom_components.imou_ha.exceptions import (
+    ImouAuthError,
+    ImouDeviceSleepingError,
+    ImouError,
+)
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
 SERIAL = "ABC123DEF456"
-DOMAIN = "imou_ha"
 
 
 # ---------------------------------------------------------------------------
@@ -105,12 +107,12 @@ class TestImouCoordinatorSetup:
         assert "Dormant" in coordinator.data[SERIAL].capabilities
 
     async def test_auth_error_in_setup_raises_config_entry_auth_failed(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouAuthError during _async_setup must raise ConfigEntryAuthFailed."""
         client = _make_mock_client()
         client.async_get_devices = AsyncMock(
-            side_effect=ImouAuthError("invalid credentials")
+            side_effect=ImouAuthError("invalid credentials"),
         )
         coordinator = ImouCoordinator(hass, client)
 
@@ -118,12 +120,12 @@ class TestImouCoordinatorSetup:
             await coordinator._async_setup()
 
     async def test_imou_error_in_setup_raises_update_failed(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """ImouError during _async_setup must raise UpdateFailed (never crashes HA — NFR1)."""
         client = _make_mock_client()
         client.async_get_devices = AsyncMock(
-            side_effect=ImouError("cloud unreachable")
+            side_effect=ImouError("cloud unreachable"),
         )
         coordinator = ImouCoordinator(hass, client)
 
@@ -166,7 +168,7 @@ class TestImouCoordinatorUpdate:
 
 class TestImouEntity:
     def _make_coordinator_with_data(
-        self, hass: HomeAssistant, devices: dict[str, ImouDeviceData]
+        self, hass: HomeAssistant, devices: dict[str, ImouDeviceData],
     ) -> ImouCoordinator:
         client = _make_mock_client(devices)
         coordinator = ImouCoordinator(hass, client)
@@ -505,7 +507,6 @@ class TestAlarmPolling:
 
     async def test_alarm_uses_last_updated_as_begin_time(self, hass: HomeAssistant) -> None:
         """Alarm call uses device.last_updated (formatted) as begin_time."""
-        from datetime import timezone
         known_time = datetime(2026, 3, 30, 10, 0, 0, tzinfo=UTC)
         device = _make_device_data(
             status=DeviceStatus.ACTIVE,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from dataclasses import asdict, dataclass
+from datetime import datetime
 
 BUDGET_STORAGE_KEY = "api_budget"
 

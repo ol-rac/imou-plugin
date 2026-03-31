@@ -6,17 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
-
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.imou_ha.config_flow import ImouConfigFlow
 from custom_components.imou_ha.const import (
     CONF_API_URL,
     CONF_APP_ID,
     CONF_APP_SECRET,
     DEFAULT_API_URL,
-    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
     OPT_ENABLE_THROTTLE,
@@ -66,7 +63,7 @@ def _mock_client(validate_side_effect=None, get_devices_return=None):
     client = MagicMock()
     client.async_validate_credentials = AsyncMock(side_effect=validate_side_effect)
     client.async_get_devices = AsyncMock(
-        return_value=get_devices_return if get_devices_return is not None else SAMPLE_DEVICES
+        return_value=get_devices_return if get_devices_return is not None else SAMPLE_DEVICES,
     )
     return client
 
@@ -84,7 +81,7 @@ async def test_step_user_form_renders(hass):
         return_value=_mock_client(),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -108,7 +105,7 @@ async def test_region_dropdown_has_four_options(hass):
         return_value=_mock_client(),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -136,10 +133,10 @@ async def test_valid_credentials_advance_to_confirm(hass):
         return_value=_mock_client(),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -159,10 +156,10 @@ async def test_invalid_credentials_show_error(hass):
         return_value=_mock_client(validate_side_effect=ImouAuthError("bad creds")),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -183,10 +180,10 @@ async def test_cannot_connect_show_error(hass):
         return_value=_mock_client(validate_side_effect=ImouError("network error")),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -205,14 +202,14 @@ async def test_license_limit_show_error(hass):
     with patch(
         "custom_components.imou_ha.config_flow.ImouApiClient",
         return_value=_mock_client(
-            validate_side_effect=ImouLicenseError("FL1001: device limit")
+            validate_side_effect=ImouLicenseError("FL1001: device limit"),
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -233,10 +230,10 @@ async def test_unknown_exception_shows_error(hass):
         return_value=_mock_client(validate_side_effect=RuntimeError("oops")),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -263,14 +260,14 @@ async def test_confirm_step_creates_entry(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         # Submit confirm step (empty form)
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {}
+            result["flow_id"], {},
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -290,10 +287,10 @@ async def test_confirm_step_shows_camera_names(hass):
         return_value=_mock_client(),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -327,19 +324,19 @@ async def test_duplicate_entry_aborted(hass):
     ):
         # First config — completes successfully
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
         # Second config — same AppId
         result2 = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result2 = await hass.config_entries.flow.async_configure(
-            result2["flow_id"], VALID_USER_INPUT
+            result2["flow_id"], VALID_USER_INPUT,
         )
 
     assert result2["type"] == FlowResultType.ABORT
@@ -365,10 +362,10 @@ async def test_options_flow_renders(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -408,10 +405,10 @@ async def test_options_flow_scan_interval_min(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -456,10 +453,10 @@ async def test_options_flow_saves_and_reloads(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -501,10 +498,10 @@ async def test_credentials_stored_in_entry_data_only(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -518,7 +515,7 @@ async def test_credentials_stored_in_entry_data_only(hass):
 
     # Not present in hass.data (under the DOMAIN key)
     assert DOMAIN not in hass.data or not isinstance(
-        hass.data.get(DOMAIN), dict
+        hass.data.get(DOMAIN), dict,
     ) or CONF_APP_SECRET not in hass.data.get(DOMAIN, {})
 
 
@@ -541,10 +538,10 @@ async def test_options_flow_has_throttle_and_reserve_fields(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -576,10 +573,10 @@ async def test_options_flow_accepts_throttle_settings(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -619,10 +616,10 @@ async def test_options_flow_rejects_reserve_above_max(hass):
         ),
     ):
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
+            DOMAIN, context={"source": SOURCE_USER},
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], VALID_USER_INPUT
+            result["flow_id"], VALID_USER_INPUT,
         )
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -19,7 +17,6 @@ from custom_components.imou_ha.sensor import (
     ImouBatterySensor,
     ImouDailyBurnRateSensor,
     ImouDeviceStateSensor,
-    ImouIntegrationSensor,
 )
 
 SERIAL = "ABC123DEF456"
@@ -245,7 +242,7 @@ class TestImouBatterySensor:
         assert attrs["device_state"] == "active"
 
     async def test_async_added_to_hass_restores_last_value(
-        self, hass: HomeAssistant
+        self, hass: HomeAssistant,
     ) -> None:
         """Battery sensor must restore last known value on HA restart (STATE-06).
 
@@ -259,7 +256,8 @@ class TestImouBatterySensor:
         sensor.async_get_last_sensor_data = AsyncMock(return_value=mock_last_data)
 
         # Patch super() call to avoid HA registration during test
-        from unittest.mock import patch, AsyncMock as AM
+        from unittest.mock import AsyncMock as AM
+        from unittest.mock import patch
         with patch(
             "custom_components.imou_ha.entity.CoordinatorEntity.async_added_to_hass",
             new_callable=lambda: lambda self: AM(return_value=None)(),

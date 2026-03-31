@@ -176,7 +176,7 @@ class ImouOptionsFlow(OptionsFlow):
                 if CONF_WEBHOOK_ID not in new_data:
                     new_data[CONF_WEBHOOK_ID] = async_generate_id()
                     self.hass.config_entries.async_update_entry(
-                        self.config_entry, data=new_data
+                        self.config_entry, data=new_data,
                     )
             # Schedule reload so the new options take effect immediately (per D-07)
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
@@ -193,7 +193,7 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Optional(OPT_WEBHOOK_ENABLED, default=False): BooleanSelector(),
                 vol.Optional(OPT_ENABLE_THROTTLE, default=DEFAULT_ENABLE_THROTTLE): BooleanSelector(),
                 vol.Optional(OPT_RESERVE_SIZE, default=DEFAULT_RESERVE_SIZE): vol.All(
-                    int, vol.Range(min=0, max=5000)
+                    int, vol.Range(min=0, max=5000),
                 ),
             },
         )

@@ -1,6 +1,5 @@
 """Shared test fixtures for imou_ha tests."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -72,6 +71,6 @@ def mock_imou_api_client(sample_device_data: ImouDeviceData) -> AsyncMock:
     client.async_get_devices = AsyncMock(
         return_value={
             "ABC123DEF456": sample_device_data,
-        }
+        },
     )
     return client

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pyimouapi import ImouOpenApiClient
 from pyimouapi.device import ImouDeviceManager
@@ -167,6 +167,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other failure.
+
         """
         self._increment_budget()
         if self._device_manager is None:
@@ -196,7 +197,7 @@ class ImouApiClient:
             raise ImouError(str(err)) from err
 
     async def async_get_device_power_info(
-        self, device_id: str
+        self, device_id: str,
     ) -> tuple[int | None, str]:
         """Get battery level and power source via /openapi/getDevicePowerInfo (ADR-1 boundary).
 
@@ -206,6 +207,7 @@ class ImouApiClient:
         Raises:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
+
         """
         self._increment_budget()
         if self._device_manager is None:
@@ -230,7 +232,7 @@ class ImouApiClient:
             raise ImouError(str(err)) from err
 
     async def async_get_alarm_status(
-        self, device_id: str, begin_time: str, end_time: str
+        self, device_id: str, begin_time: str, end_time: str,
     ) -> tuple[bool, bool]:
         """Get motion and human detection status via /openapi/getAlarmMessage (D-01).
 
@@ -252,6 +254,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other API failure.
+
         """
         self._increment_budget()
         try:
@@ -275,7 +278,7 @@ class ImouApiClient:
             raise ImouError(str(err)) from err
 
     async def async_get_stream_url(
-        self, device_id: str, channel: str = "0"
+        self, device_id: str, channel: str = "0",
     ) -> tuple[str | None, str | None]:
         """Get HLS stream URLs (HD and SD) for a device channel (STRM-01, D-01).
 
@@ -295,6 +298,7 @@ class ImouApiClient:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouDeviceOfflineError: when device is offline (DV1007).
             ImouError: for any other failure.
+
         """
         self._increment_budget()
         if self._device_manager is None:
@@ -309,7 +313,7 @@ class ImouApiClient:
                     # Stream session does not exist — create one
                     try:
                         data = await self._device_manager.async_create_stream_url(
-                            device_id, channel, stream_id=0
+                            device_id, channel, stream_id=0,
                         )
                     except RequestFailedException as create_err:
                         create_msg = (
@@ -323,7 +327,7 @@ class ImouApiClient:
                         if create_code == ERROR_CODE_LIVE_ALREADY_EXIST:
                             # Session created by another client — get it now
                             data = await self._device_manager.async_get_stream_url(
-                                device_id, channel
+                                device_id, channel,
                             )
                         else:
                             raise self._translate_exception(create_err) from create_err
@@ -332,7 +336,7 @@ class ImouApiClient:
 
             streams = data.get("streams", [])
             hd_url: str | None = next(
-                (s["hls"] for s in streams if s.get("hls")), None
+                (s["hls"] for s in streams if s.get("hls")), None,
             )
             sd_url: str | None = (
                 streams[1]["hls"]
@@ -355,13 +359,14 @@ class ImouApiClient:
         Raises:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
+
         """
         self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
             data = await self._device_manager.async_get_device_status(
-                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA
+                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA,
             )
             return bool(data.get("enable", False))
         except RequestFailedException as err:
@@ -379,13 +384,14 @@ class ImouApiClient:
         Raises:
             ImouDeviceSleepingError: when device is sleeping (DV1030).
             ImouError: for any other failure.
+
         """
         self._increment_budget()
         if self._device_manager is None:
             self._device_manager = ImouDeviceManager(self._client)
         try:
             await self._device_manager.async_set_device_status(
-                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA, enabled
+                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_CAMERA, enabled,
             )
         except RequestFailedException as err:
             raise self._translate_exception(err) from err
@@ -393,7 +399,7 @@ class ImouApiClient:
             raise ImouError(str(err)) from err
 
     async def async_set_message_callback(
-        self, callback_url: str, *, enable: bool
+        self, callback_url: str, *, enable: bool,
     ) -> None:
         """Register or deregister Imou push notification callback URL (per D-02, D-03)."""
         self._increment_budget()

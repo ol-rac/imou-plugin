@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.imou_ha.exceptions import ImouDeviceSleepingError, ImouError
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
-
 
 # ---------------------------------------------------------------------------
 # API Client tests — streaming and privacy methods
@@ -35,7 +34,7 @@ class TestAsyncGetStreamUrl:
             "streams": [
                 {"hls": "https://hls.example.com/hd.m3u8"},
                 {"hls": "https://hls.example.com/sd.m3u8"},
-            ]
+            ],
         }
 
         hd, sd = await client.async_get_stream_url("ABC123")
@@ -50,7 +49,7 @@ class TestAsyncGetStreamUrl:
         device_manager.async_get_stream_url.return_value = {
             "streams": [
                 {"hls": "https://hls.example.com/hd.m3u8"},
-            ]
+            ],
         }
 
         hd, sd = await client.async_get_stream_url("ABC123")
@@ -64,13 +63,13 @@ class TestAsyncGetStreamUrl:
 
         client, device_manager = api_client
         device_manager.async_get_stream_url.side_effect = RequestFailedException(
-            "LV1002:Live not exist"
+            "LV1002:Live not exist",
         )
         device_manager.async_create_stream_url.return_value = {
             "streams": [
                 {"hls": "https://hls.example.com/hd.m3u8"},
                 {"hls": "https://hls.example.com/sd.m3u8"},
-            ]
+            ],
         }
 
         hd, sd = await client.async_get_stream_url("ABC123")
@@ -88,7 +87,7 @@ class TestAsyncGetStreamUrl:
             {"streams": [{"hls": "https://hls.example.com/hd.m3u8"}]},
         ]
         device_manager.async_create_stream_url.side_effect = RequestFailedException(
-            "LV1001:Live already exist"
+            "LV1001:Live already exist",
         )
 
         hd, sd = await client.async_get_stream_url("ABC123")
@@ -102,7 +101,7 @@ class TestAsyncGetStreamUrl:
 
         client, device_manager = api_client
         device_manager.async_get_stream_url.side_effect = RequestFailedException(
-            "DV1030:Device is sleeping"
+            "DV1030:Device is sleeping",
         )
 
         with pytest.raises(ImouDeviceSleepingError):
@@ -114,7 +113,7 @@ class TestAsyncGetStreamUrl:
 
         client, device_manager = api_client
         device_manager.async_get_stream_url.side_effect = RequestFailedException(
-            "GEN9999:Unknown error"
+            "GEN9999:Unknown error",
         )
 
         with pytest.raises(ImouError):
@@ -143,7 +142,7 @@ class TestAsyncGetPrivacyMode:
 
         assert result is True
         device_manager.async_get_device_status.assert_called_once_with(
-            "ABC123", "0", "closeCamera"
+            "ABC123", "0", "closeCamera",
         )
 
     async def test_privacy_mode_returns_false_when_disabled(self, api_client):
@@ -186,7 +185,7 @@ class TestAsyncSetPrivacyMode:
         await client.async_set_privacy_mode("ABC123", True)
 
         device_manager.async_set_device_status.assert_called_once_with(
-            "ABC123", "0", "closeCamera", True
+            "ABC123", "0", "closeCamera", True,
         )
 
     async def test_set_privacy_mode_disabled_calls_correct_params(self, api_client):
@@ -197,7 +196,7 @@ class TestAsyncSetPrivacyMode:
         await client.async_set_privacy_mode("ABC123", False)
 
         device_manager.async_set_device_status.assert_called_once_with(
-            "ABC123", "0", "closeCamera", False
+            "ABC123", "0", "closeCamera", False,
         )
 
     async def test_set_privacy_mode_raises_sleeping_error(self, api_client):
@@ -206,7 +205,7 @@ class TestAsyncSetPrivacyMode:
 
         client, device_manager = api_client
         device_manager.async_set_device_status.side_effect = RequestFailedException(
-            "DV1030:Device is sleeping"
+            "DV1030:Device is sleeping",
         )
 
         with pytest.raises(ImouDeviceSleepingError):
@@ -228,7 +227,7 @@ class TestCoordinatorPrivacyPolling:
 
         client = AsyncMock()
         client.async_get_device_online_status = AsyncMock(
-            return_value=DeviceStatus.ACTIVE
+            return_value=DeviceStatus.ACTIVE,
         )
         client.async_get_privacy_mode = AsyncMock(return_value=True)
         # sample_device_data has MobileDetect so alarm status will also be polled
@@ -238,7 +237,7 @@ class TestCoordinatorPrivacyPolling:
         return coordinator, client
 
     async def test_privacy_polled_for_closedcamera_device(
-        self, make_coordinator, sample_device_data
+        self, make_coordinator, sample_device_data,
     ):
         """coordinator _async_poll_device polls privacy_enabled for CloseCamera devices."""
         coordinator, client = make_coordinator
@@ -266,7 +265,7 @@ class TestCoordinatorPrivacyPolling:
 
         client = AsyncMock()
         client.async_get_device_online_status = AsyncMock(
-            return_value=DeviceStatus.ACTIVE
+            return_value=DeviceStatus.ACTIVE,
         )
         client.async_get_privacy_mode = AsyncMock(return_value=True)
         coordinator = ImouCoordinator(hass, client, scan_interval=60)
@@ -286,7 +285,6 @@ class TestCoordinatorPrivacyPolling:
 @pytest.fixture
 def mock_coordinator(hass, sample_device_data):
     """Return a mock coordinator with one device."""
-    from unittest.mock import MagicMock
 
     coordinator = MagicMock()
     coordinator.hass = hass
@@ -296,7 +294,7 @@ def mock_coordinator(hass, sample_device_data):
         return_value=(
             "https://hls.example.com/hd.m3u8",
             "https://hls.example.com/sd.m3u8",
-        )
+        ),
     )
     return coordinator
 
@@ -325,7 +323,6 @@ class TestImouCamera:
 
     async def test_stream_source_fetches_fresh_after_ttl(self, camera, mock_coordinator):
         """ImouCamera.stream_source() fetches fresh URL after TTL expires."""
-        from custom_components.imou_ha.const import STREAM_URL_CACHE_TTL
 
         await camera.stream_source()
 
@@ -346,7 +343,7 @@ class TestImouCamera:
         assert url is None
 
     async def test_extra_state_attributes_contains_sd_stream_url(
-        self, camera, mock_coordinator
+        self, camera, mock_coordinator,
     ):
         """ImouCamera.extra_state_attributes contains sd_stream_url key (STRM-02)."""
         # Populate cache first
@@ -369,10 +366,9 @@ class TestImouCamera:
         assert camera.supported_features == CameraEntityFeature.STREAM
 
     async def test_async_setup_entry_creates_one_camera_per_device(
-        self, hass, mock_coordinator
+        self, hass, mock_coordinator,
     ):
         """async_setup_entry creates exactly one ImouCamera per device (D-06)."""
-        from unittest.mock import MagicMock, patch
 
         from custom_components.imou_ha.camera import async_setup_entry
 
