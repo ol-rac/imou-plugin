@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.1.3 (2026-03-31)
+
+### Bug Fixes
+
+- Check Dormant capability at runtime instead of __init__
+  ([`af20da2`](https://github.com/ol-rac/imou-plugin/commit/af20da2d06ae7f5c36631eabdb81278ef22830e7))
+
+
 ## v0.1.2 (2026-03-31)
 
 ### Bug Fixes
