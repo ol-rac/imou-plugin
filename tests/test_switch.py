@@ -9,6 +9,7 @@ import pytest
 from custom_components.imou_ha.exceptions import (
     ImouDeviceOfflineError,
     ImouDeviceSleepingError,
+    ImouError,
 )
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
@@ -24,6 +25,11 @@ def _make_coordinator(devices: dict) -> MagicMock:
     coordinator.client = AsyncMock()
     coordinator.client.async_set_privacy_mode = AsyncMock()
     coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
+    coordinator.client.async_wake_up_via_dormant = AsyncMock()
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE,
+    )
+    coordinator.async_request_refresh = AsyncMock()
     return coordinator
 
 
@@ -233,7 +239,7 @@ async def test_state_not_updated_optimistically() -> None:
     """Test that state is NOT updated before verification (D-14, non-optimistic pattern).
 
     privacy_enabled should remain unchanged until poll confirms the new state.
-    Only applies to powered (non-battery) cameras — battery cameras use optimistic state.
+    Applies to ALL cameras (powered and battery alike after D-06 removal of optimistic bypass).
     """
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
@@ -267,10 +273,14 @@ async def test_state_not_updated_optimistically() -> None:
 
 @pytest.mark.asyncio
 async def test_sleeping_device_leaves_state_unchanged() -> None:
-    """Test sleeping device raises ImouDeviceSleepingError — state unchanged, warning logged (CTRL-03, D-15)."""
+    """Test sleeping powered device raises ImouDeviceSleepingError — state unchanged (CTRL-03, D-15).
+
+    Powered (non-battery) cameras do not wake up — state stays unchanged.
+    Battery cameras would attempt wake — tested separately.
+    """
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_set_privacy_mode = AsyncMock(
         side_effect=ImouDeviceSleepingError("DV1030:sleeping"),
@@ -299,6 +309,10 @@ async def test_offline_device_leaves_state_unchanged() -> None:
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_set_privacy_mode = AsyncMock(
         side_effect=ImouDeviceOfflineError("DV1007:offline"),
+    )
+    # Wake fails — device stays offline
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.OFFLINE,
     )
 
     switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
@@ -390,28 +404,6 @@ async def test_verification_succeeds_on_second_retry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_battery_camera_uses_optimistic_state() -> None:
-    """Test battery (Dormant) camera trusts command without verification polling."""
-    from custom_components.imou_ha.switch import ImouPrivacySwitch
-
-    device = _make_privacy_device(privacy_enabled=False)
-    coordinator = _make_coordinator({"ABC123DEF456": device})
-
-    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
-    switch.coordinator = coordinator
-    switch._device_serial = "ABC123DEF456"
-    switch.async_write_ha_state = MagicMock()
-
-    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
-        await switch.async_turn_on()
-
-    # Battery camera: state updated immediately, no verification poll
-    assert device.privacy_enabled is True
-    switch.async_write_ha_state.assert_called_once()
-    coordinator.client.async_get_privacy_mode.assert_not_called()
-
-
-@pytest.mark.asyncio
 async def test_verify_max_retries_count() -> None:
     """Test that verification polls exactly VERIFY_MAX_RETRIES times on timeout."""
     from custom_components.imou_ha.switch import VERIFY_MAX_RETRIES, ImouPrivacySwitch
@@ -432,3 +424,169 @@ async def test_verify_max_retries_count() -> None:
     # Should sleep VERIFY_MAX_RETRIES times
     assert mock_sleep.call_count == VERIFY_MAX_RETRIES
     assert coordinator.client.async_get_privacy_mode.call_count == VERIFY_MAX_RETRIES
+
+
+# ---------------------------------------------------------------------------
+# New wake flow tests (D-03, D-05, D-06, D-11, D-13)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_battery_camera_uses_poll_after_command() -> None:
+    """Test battery (Dormant) camera uses poll-after-command, NOT optimistic state (D-05, D-06).
+
+    Battery cameras must now call async_get_privacy_mode to confirm state,
+    not trust the command result immediately.
+    """
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Battery camera: poll-after-command must be called (not optimistic)
+    coordinator.client.async_get_privacy_mode.assert_called()
+    assert device.privacy_enabled is True
+    switch.async_write_ha_state.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_and_verify_returns_true_on_active() -> None:
+    """Test _async_wake_and_verify returns True when device reaches ACTIVE on first attempt (D-03)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device()
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE,
+    )
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        result = await switch._async_wake_and_verify()
+
+    assert result is True
+    coordinator.client.async_wake_up_via_dormant.assert_awaited_once_with("ABC123DEF456")
+    coordinator.client.async_get_device_online_status.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_wake_and_verify_calls_coordinator_refresh_on_active() -> None:
+    """Test _async_wake_and_verify calls coordinator.async_request_refresh when ACTIVE (D-11, D-13)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device()
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE,
+    )
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        result = await switch._async_wake_and_verify()
+
+    assert result is True
+    coordinator.async_request_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_and_verify_retries_and_returns_false() -> None:
+    """Test _async_wake_and_verify retries up to WAKE_UP_MAX_RETRIES and returns False if never ACTIVE (D-03)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+    from custom_components.imou_ha.const import WAKE_UP_MAX_RETRIES
+
+    device = _make_privacy_device()
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # Always returns SLEEPING — never wakes up
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.SLEEPING,
+    )
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        result = await switch._async_wake_and_verify()
+
+    assert result is False
+    # Should have attempted WAKE_UP_MAX_RETRIES times
+    assert coordinator.client.async_wake_up_via_dormant.await_count == WAKE_UP_MAX_RETRIES
+    # Should NOT call async_request_refresh since never reached ACTIVE
+    coordinator.async_request_refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sleeping_battery_wakes_then_sends_privacy_command() -> None:
+    """Test sleeping battery camera wakes, retries privacy command, and polls to confirm (D-04, D-05)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # First set_privacy_mode raises sleeping, second succeeds
+    coordinator.client.async_set_privacy_mode = AsyncMock(
+        side_effect=[ImouDeviceSleepingError("DV1030:sleeping"), None],
+    )
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE,
+    )
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Wake was attempted
+    coordinator.client.async_wake_up_via_dormant.assert_awaited()
+    # Privacy command retried after wake
+    assert coordinator.client.async_set_privacy_mode.await_count == 2
+    # Poll-after-command confirmation called
+    coordinator.client.async_get_privacy_mode.assert_called()
+    # State confirmed
+    assert device.privacy_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_wake_triggers_coordinator_refresh() -> None:
+    """Test coordinator.async_request_refresh is called exactly once after successful wake (D-13)."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+    # First set_privacy_mode raises sleeping, second succeeds after wake
+    coordinator.client.async_set_privacy_mode = AsyncMock(
+        side_effect=[ImouDeviceSleepingError("DV1030:sleeping"), None],
+    )
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE,
+    )
+    coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # coordinator.async_request_refresh called exactly once after successful wake
+    coordinator.async_request_refresh.assert_awaited_once()
