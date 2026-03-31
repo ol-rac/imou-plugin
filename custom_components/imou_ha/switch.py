@@ -59,7 +59,6 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
     def __init__(self, coordinator: ImouCoordinator, device_serial: str) -> None:
         """Initialise privacy switch."""
         super().__init__(coordinator, device_serial, "privacy")
-        self._is_battery = CAPABILITY_DORMANT in self.device_data.capabilities
 
     @property
     def is_on(self) -> bool | None:
@@ -109,7 +108,7 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
             return  # state unchanged — already reflects reality
 
         # Step 2: Battery cameras — trust command, skip verification
-        if self._is_battery:
+        if CAPABILITY_DORMANT in self.device_data.capabilities:
             _LOGGER.debug(
                 "Battery device %s — trusting privacy command (optimistic)",
                 self._device_serial,
