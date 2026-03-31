@@ -9,7 +9,6 @@ import pytest
 from custom_components.imou_ha.exceptions import (
     ImouDeviceOfflineError,
     ImouDeviceSleepingError,
-    ImouError,
 )
 from custom_components.imou_ha.models import DeviceStatus, ImouDeviceData
 
@@ -506,8 +505,8 @@ async def test_wake_and_verify_calls_coordinator_refresh_on_active() -> None:
 @pytest.mark.asyncio
 async def test_wake_and_verify_retries_and_returns_false() -> None:
     """Test _async_wake_and_verify retries up to WAKE_UP_MAX_RETRIES and returns False if never ACTIVE (D-03)."""
-    from custom_components.imou_ha.switch import ImouPrivacySwitch
     from custom_components.imou_ha.const import WAKE_UP_MAX_RETRIES
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
 
     device = _make_privacy_device()
     coordinator = _make_coordinator({"ABC123DEF456": device})
