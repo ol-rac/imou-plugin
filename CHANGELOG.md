@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.5.1 (2026-03-31)
+
+### Bug Fixes
+
+- Immediate entity update after wake via async_set_updated_data
+  ([`50fcfee`](https://github.com/ol-rac/imou-plugin/commit/50fcfee8f0ba0616e4e684b6b77d7e6034ba8a40))
+
+
 ## v0.5.0 (2026-03-31)
 
 ### Features
