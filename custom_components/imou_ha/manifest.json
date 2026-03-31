@@ -1,7 +1,7 @@
 {
   "domain": "imou_ha",
   "name": "Imou",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "config_flow": true,
   "iot_class": "cloud_polling",
   "requirements": ["pyimouapi>=1.2.2"],

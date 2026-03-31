@@ -14,7 +14,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install ruff pytest pytest-homeassistant-custom-component pyimouapi aiohttp
+          pip install ruff pytest pytest-asyncio pytest-homeassistant-custom-component pyimouapi aiohttp
       - name: Ruff lint
         run: ruff check .
       - name: Run tests
