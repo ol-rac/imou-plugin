@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.2.0 (2026-03-31)
+
+### Features
+
+- Wake up battery cameras before privacy command
+  ([`07a3a4e`](https://github.com/ol-rac/imou-plugin/commit/07a3a4eb27f2f4d707fe73a208c4aecf044f0d17))
+
+### Testing
+
+- Fix switch tests for battery vs powered camera distinction
+  ([`06e061a`](https://github.com/ol-rac/imou-plugin/commit/06e061a2bb6e87016a3b6983c0b56888f3f2fb13))
+
+
 ## v0.1.3 (2026-03-31)
 
 ### Bug Fixes
