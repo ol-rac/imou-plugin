@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-03-31)
+
+### Features
+
+- Add Wake Up button for battery cameras
+  ([`750edd3`](https://github.com/ol-rac/imou-plugin/commit/750edd3cdea42d9dffb009164b5846faedc96a82))
+
+
 ## v0.2.0 (2026-03-31)
 
 ### Features
