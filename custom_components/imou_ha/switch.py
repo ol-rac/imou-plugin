@@ -10,7 +10,11 @@ from homeassistant.components.switch import SwitchEntity
 
 from .const import CAPABILITY_PRIVACY
 from .entity import ImouEntity
-from .exceptions import ImouDeviceOfflineError, ImouDeviceSleepingError
+from .exceptions import (
+    ImouDeviceOfflineError,
+    ImouDeviceSleepingError,
+    ImouNotSupportedError,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -83,6 +87,15 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
                 self._device_serial,
                 enable,
             )
+        except ImouNotSupportedError:
+            # DV1026: device reports CloseCamera capability but doesn't support it
+            _LOGGER.warning(
+                "Device %s does not support privacy mode (DV1026) — disabling entity",
+                self._device_serial,
+            )
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
         except (ImouDeviceSleepingError, ImouDeviceOfflineError) as err:
             # D-15/CTRL-03: Immediate failure — device unreachable
             _LOGGER.warning(

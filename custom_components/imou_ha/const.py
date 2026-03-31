@@ -76,6 +76,7 @@ DEFAULT_RESERVE_SIZE = 500
 THROTTLE_WARN_PCT = 0.30     # Double interval when remaining < 30%
 THROTTLE_CRITICAL_PCT = 0.10  # Quadruple interval when remaining < 10%
 ERROR_CODE_QUOTA_EXCEEDED = "OP1013"
+ERROR_CODE_NOT_SUPPORTED = "DV1026"
 
 # Options keys for budget
 OPT_ENABLE_THROTTLE = "enable_throttle"

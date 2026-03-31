@@ -23,3 +23,7 @@ class ImouRateLimitError(ImouError):
 
 class ImouDeviceOfflineError(ImouError):
     """Device is offline (DV1007)."""
+
+
+class ImouNotSupportedError(ImouError):
+    """Device does not support this function (DV1026)."""

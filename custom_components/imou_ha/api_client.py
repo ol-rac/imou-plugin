@@ -25,6 +25,7 @@ from .const import (
     ERROR_CODE_LICENSE_LIMIT,
     ERROR_CODE_LIVE_ALREADY_EXIST,
     ERROR_CODE_LIVE_NOT_EXIST,
+    ERROR_CODE_NOT_SUPPORTED,
     ERROR_CODE_RATE_LIMIT,
 )
 from .exceptions import (
@@ -33,6 +34,7 @@ from .exceptions import (
     ImouDeviceSleepingError,
     ImouError,
     ImouLicenseError,
+    ImouNotSupportedError,
     ImouRateLimitError,
 )
 from .models import DeviceStatus, ImouDeviceData
@@ -447,4 +449,6 @@ class ImouApiClient:
             return ImouDeviceOfflineError(message)
         if error_code == ERROR_CODE_DEVICE_SLEEPING:
             return ImouDeviceSleepingError(message)
+        if error_code == ERROR_CODE_NOT_SUPPORTED:
+            return ImouNotSupportedError(message)
         return ImouError(message)

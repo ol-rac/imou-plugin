@@ -34,6 +34,7 @@ from .exceptions import (
     ImouDeviceOfflineError,
     ImouDeviceSleepingError,
     ImouError,
+    ImouNotSupportedError,
 )
 from .models import DeviceStatus, ImouDeviceData
 
@@ -227,7 +228,11 @@ class ImouCoordinator(DataUpdateCoordinator[dict[str, ImouDeviceData]]):
                 device.battery_power_source = power_source
 
             if CAPABILITY_PRIVACY in device.capabilities:
-                device.privacy_enabled = await self.client.async_get_privacy_mode(serial)
+                try:
+                    device.privacy_enabled = await self.client.async_get_privacy_mode(serial)
+                except ImouNotSupportedError:
+                    _LOGGER.info("Device %s reports CloseCamera but doesn't support it (DV1026) — skipping privacy poll", serial)
+                    device.capabilities.discard(CAPABILITY_PRIVACY)
 
             # Alarm poll must happen BEFORE last_updated is set so the time window uses
             # the previous poll's timestamp as begin_time (D-02, D-03).
