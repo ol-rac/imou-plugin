@@ -421,19 +421,22 @@ class ImouApiClient:
     async def async_wake_up_via_dormant(self, device_id: str) -> None:
         """Wake up a sleeping device via setDeviceCameraStatus(closeDormant=True).
 
-        This is the method used by imou_life — sends closeDormant through the same
-        setDeviceCameraStatus API that controls camera features.
+        This is the method used by imou_life — calls the API directly without
+        channel_id, which is not needed for closeDormant.
 
         Raises:
             ImouError: for any failure.
 
         """
         self._increment_budget()
-        if self._device_manager is None:
-            self._device_manager = ImouDeviceManager(self._client)
         try:
-            await self._device_manager.async_set_device_status(
-                device_id, CHANNEL_DEFAULT, ENABLE_TYPE_CLOSE_DORMANT, enabled=True,
+            await self._client.async_request_api(
+                "/openapi/setDeviceCameraStatus",
+                {
+                    "deviceId": device_id,
+                    "enableType": ENABLE_TYPE_CLOSE_DORMANT,
+                    "enable": True,
+                },
             )
         except RequestFailedException as err:
             raise self._translate_exception(err) from err
