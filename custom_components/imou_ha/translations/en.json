@@ -82,11 +82,8 @@
       }
     },
     "button": {
-      "wake_up_dormant": {
-        "name": "Wake up (closeDormant)"
-      },
-      "wake_up_api": {
-        "name": "Wake up (wakeUpDevice)"
+      "wake_up": {
+        "name": "Wake up"
       }
     }
   }

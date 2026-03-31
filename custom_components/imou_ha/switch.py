@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
 
-from .const import CAPABILITY_DORMANT, CAPABILITY_PRIVACY
+from .const import (
+    CAPABILITY_DORMANT,
+    CAPABILITY_PRIVACY,
+    WAKE_UP_MAX_RETRIES,
+    WAKE_UP_VERIFY_DELAY_SECONDS,
+)
 from .entity import ImouEntity
 from .exceptions import (
     ImouDeviceOfflineError,
@@ -16,6 +21,7 @@ from .exceptions import (
     ImouError,
     ImouNotSupportedError,
 )
+from .models import DeviceStatus
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -28,10 +34,6 @@ _LOGGER = logging.getLogger(__name__)
 # Command verification constants (D-10, D-11)
 VERIFY_DELAY_SECONDS = 2
 VERIFY_MAX_RETRIES = 3
-
-# Wake-up timing for battery cameras
-WAKE_UP_DELAY_SECONDS = 3
-WAKE_UP_MAX_RETRIES = 3
 
 
 async def async_setup_entry(
@@ -51,8 +53,9 @@ async def async_setup_entry(
 class ImouPrivacySwitch(ImouEntity, SwitchEntity):
     """Privacy mode switch with wake-up support for battery cameras.
 
-    Powered cameras: non-optimistic with poll-after-command verification.
-    Battery (Dormant) cameras: wake up device first, then send command optimistically.
+    All cameras use poll-after-command verification after wake (if needed).
+    Battery (Dormant) cameras: wake via closeDormant if sleeping, then poll-after-command.
+    Powered cameras: send command, verify via poll-after-command.
     """
 
     _attr_has_entity_name = True
@@ -75,36 +78,47 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
         """Disable privacy mode."""
         await self._async_execute_privacy_command(enable=False)
 
-    async def _async_wake_and_retry(self, enable: bool) -> bool:
-        """Wake a sleeping battery camera and retry the privacy command.
+    async def _async_wake_and_verify(self) -> bool:
+        """Wake sleeping battery camera via closeDormant, verify ACTIVE status.
 
-        Returns True if the command succeeded after wake-up.
+        Returns True when device reaches ACTIVE state within retry budget.
+        Calls coordinator.async_request_refresh() on success so all entities update (D-11, D-13).
         """
         for attempt in range(WAKE_UP_MAX_RETRIES):
+            _LOGGER.debug(
+                "closeDormant attempt %d/%d for %s",
+                attempt + 1, WAKE_UP_MAX_RETRIES, self._device_serial,
+            )
             try:
-                _LOGGER.debug(
-                    "Waking battery device %s (attempt %d/%d)",
-                    self._device_serial, attempt + 1, WAKE_UP_MAX_RETRIES,
-                )
-                await self.coordinator.client.async_wake_up_device(self._device_serial)
-                await asyncio.sleep(WAKE_UP_DELAY_SECONDS)
-                await self.coordinator.client.async_set_privacy_mode(
-                    self._device_serial, enable,
-                )
-                return True
-            except ImouDeviceSleepingError:
-                _LOGGER.debug("Device %s still sleeping after wake attempt %d", self._device_serial, attempt + 1)
-                continue
+                await self.coordinator.client.async_wake_up_via_dormant(self._device_serial)
             except ImouError as err:
-                _LOGGER.warning("Wake+command failed for %s: %s", self._device_serial, err)
-                return False
+                _LOGGER.debug("closeDormant call error (non-fatal): %s", err)
+
+            await asyncio.sleep(WAKE_UP_VERIFY_DELAY_SECONDS)
+
+            try:
+                status = await self.coordinator.client.async_get_device_online_status(
+                    self._device_serial,
+                )
+                if status == DeviceStatus.ACTIVE:
+                    _LOGGER.debug("Device %s is ACTIVE after wake", self._device_serial)
+                    await self.coordinator.async_request_refresh()
+                    return True
+            except ImouError as err:
+                _LOGGER.debug("Status check error on attempt %d: %s", attempt + 1, err)
+
+        _LOGGER.warning(
+            "Device %s did not reach ACTIVE after %d wake attempts",
+            self._device_serial, WAKE_UP_MAX_RETRIES,
+        )
         return False
 
     async def _async_execute_privacy_command(self, *, enable: bool) -> None:
         """Send privacy command with wake-up support for battery cameras.
 
-        Battery cameras: wake up first if sleeping, then trust command (optimistic).
-        Powered cameras: send command, verify via poll-after-command.
+        All cameras use poll-after-command verification after a successful command.
+        Battery (Dormant) cameras: wake via closeDormant if sleeping, then retry command.
+        Powered cameras: send command directly, no wake attempt.
         """
         previous = self.device_data.privacy_enabled
         is_battery = CAPABILITY_DORMANT in self.device_data.capabilities
@@ -127,19 +141,26 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
                 _LOGGER.warning("Privacy command failed for %s: device unreachable", self._device_serial)
                 return
 
-            # Battery camera sleeping — wake up and retry
-            if not await self._async_wake_and_retry(enable):
-                _LOGGER.warning("Could not wake device %s after %d attempts", self._device_serial, WAKE_UP_MAX_RETRIES)
+            # Battery camera sleeping — wake and resend
+            if not await self._async_wake_and_verify():
+                _LOGGER.warning(
+                    "Could not wake device %s after %d attempts",
+                    self._device_serial, WAKE_UP_MAX_RETRIES,
+                )
+                return
+            # Device is now ACTIVE — retry the privacy command once
+            try:
+                await self.coordinator.client.async_set_privacy_mode(
+                    self._device_serial, enable,
+                )
+            except ImouError as err:
+                _LOGGER.warning(
+                    "Privacy command failed after wake for %s: %s",
+                    self._device_serial, err,
+                )
                 return
 
-        # Step 2: Battery cameras — trust command, skip verification
-        if is_battery:
-            _LOGGER.debug("Battery device %s — trusting privacy command (optimistic)", self._device_serial)
-            self.device_data.privacy_enabled = enable
-            self.async_write_ha_state()
-            return
-
-        # Step 3: Powered cameras — poll-after-command verification
+        # Step 2: Poll-after-command verification for ALL cameras (battery and powered alike)
         for _attempt in range(VERIFY_MAX_RETRIES):
             await asyncio.sleep(VERIFY_DELAY_SECONDS)
             try:

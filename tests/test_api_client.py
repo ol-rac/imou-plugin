@@ -529,3 +529,31 @@ class TestMessageCallback:
         )
         with pytest.raises(ImouRateLimitError):
             await client.async_get_message_callback()
+
+
+# ---------------------------------------------------------------------------
+# Wake-up method tests (D-01, D-02)
+# ---------------------------------------------------------------------------
+
+
+def test_wake_up_device_method_removed() -> None:
+    """Confirm async_wake_up_device is removed from ImouApiClient (D-02)."""
+    assert not hasattr(ImouApiClient, "async_wake_up_device")
+
+
+class TestAsyncWakeUpViaDormant:
+    async def test_wake_up_via_dormant_calls_correct_api(self) -> None:
+        """async_wake_up_via_dormant calls setDeviceCameraStatus with closeDormant params (D-01)."""
+        client = _make_client()
+        client._client.async_request_api = AsyncMock(return_value={})
+
+        await client.async_wake_up_via_dormant("ABC123DEF456")
+
+        client._client.async_request_api.assert_awaited_once()
+        call_args = client._client.async_request_api.call_args
+        assert call_args[0][0] == "/openapi/setDeviceCameraStatus"
+        params = call_args[0][1]
+        assert params["deviceId"] == "ABC123DEF456"
+        assert params["channelId"] == "0"
+        assert params["enableType"] == "closeDormant"
+        assert params["enable"] is True

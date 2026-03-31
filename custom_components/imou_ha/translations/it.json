@@ -82,11 +82,8 @@
       }
     },
     "button": {
-      "wake_up_dormant": {
-        "name": "Risveglia (closeDormant)"
-      },
-      "wake_up_api": {
-        "name": "Risveglia (wakeUpDevice)"
+      "wake_up": {
+        "name": "Risveglia"
       }
     }
   }
