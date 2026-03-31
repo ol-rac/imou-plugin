@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
 
-from .const import CAPABILITY_PRIVACY
+from .const import CAPABILITY_DORMANT, CAPABILITY_PRIVACY
 from .entity import ImouEntity
 from .exceptions import (
     ImouDeviceOfflineError,
@@ -48,6 +48,9 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
 
     Non-optimistic: state holds previous confirmed value until poll-after-command
     confirms the new state (D-14). Reverts on failure or timeout (D-15, D-16).
+
+    Battery (Dormant) cameras: command is trusted optimistically because the device
+    goes to sleep immediately after responding, making poll-after-command unreliable.
     """
 
     _attr_has_entity_name = True
@@ -56,6 +59,7 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
     def __init__(self, coordinator: ImouCoordinator, device_serial: str) -> None:
         """Initialise privacy switch."""
         super().__init__(coordinator, device_serial, "privacy")
+        self._is_battery = CAPABILITY_DORMANT in self.device_data.capabilities
 
     @property
     def is_on(self) -> bool | None:
@@ -74,10 +78,11 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
         """Send command and verify via poll-after-command (D-10, D-11, D-12).
 
         1. Send setDeviceCameraStatus command
-        2. Poll getDeviceCameraStatus up to 3 times at 2s intervals
-        3. On match: update device_data.privacy_enabled, write state (CONFIRMED)
-        4. On sleeping/offline: revert, log warning (D-15, CTRL-03)
-        5. On timeout: revert to previous state (D-16, CTRL-04)
+        2. For battery cameras: trust the command (optimistic) — skip verification
+        3. For powered cameras: poll getDeviceCameraStatus up to 3 times at 2s intervals
+        4. On match: update device_data.privacy_enabled, write state (CONFIRMED)
+        5. On sleeping/offline: revert, log warning (D-15, CTRL-03)
+        6. On timeout: revert to previous state (D-16, CTRL-04)
         """
         previous = self.device_data.privacy_enabled
 
@@ -88,7 +93,6 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
                 enable,
             )
         except ImouNotSupportedError:
-            # DV1026: device reports CloseCamera capability but doesn't support it
             _LOGGER.warning(
                 "Device %s does not support privacy mode (DV1026) — disabling entity",
                 self._device_serial,
@@ -97,7 +101,6 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
             self.async_write_ha_state()
             return
         except (ImouDeviceSleepingError, ImouDeviceOfflineError) as err:
-            # D-15/CTRL-03: Immediate failure — device unreachable
             _LOGGER.warning(
                 "Privacy command failed for %s: %s",
                 self._device_serial,
@@ -105,7 +108,17 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
             )
             return  # state unchanged — already reflects reality
 
-        # Step 2: Poll-after-command verification (D-10, D-11)
+        # Step 2: Battery cameras — trust command, skip verification
+        if self._is_battery:
+            _LOGGER.debug(
+                "Battery device %s — trusting privacy command (optimistic)",
+                self._device_serial,
+            )
+            self.device_data.privacy_enabled = enable
+            self.async_write_ha_state()
+            return
+
+        # Step 3: Powered cameras — poll-after-command verification (D-10, D-11)
         for _attempt in range(VERIFY_MAX_RETRIES):
             await asyncio.sleep(VERIFY_DELAY_SECONDS)
             try:
@@ -113,12 +126,10 @@ class ImouPrivacySwitch(ImouEntity, SwitchEntity):
                     self._device_serial,
                 )
                 if actual == enable:
-                    # D-12: CONFIRMED — update state
                     self.device_data.privacy_enabled = actual
                     self.async_write_ha_state()
                     return
             except (ImouDeviceSleepingError, ImouDeviceOfflineError):
-                # D-15: device went offline during verification
                 break
 
         # D-16/CTRL-04: TIMEOUT — revert to previous confirmed state
