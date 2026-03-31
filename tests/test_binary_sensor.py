@@ -37,7 +37,7 @@ def _make_device(
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=status,
-        capabilities=capabilities or {"Dormant", "closedCamera"},
+        capabilities=capabilities or {"Dormant", "CloseCamera"},
         motion_detected=motion_detected,
         human_detected=human_detected,
     )
@@ -310,7 +310,7 @@ class TestBinarySensorSetup:
         self, hass: HomeAssistant
     ) -> None:
         """ImouMotionSensor is NOT created for device without motion capabilities (D-08)."""
-        device = _make_device(capabilities={"closedCamera", "Dormant"})
+        device = _make_device(capabilities={"CloseCamera", "Dormant"})
         entities = await self._run_setup(hass, {SERIAL: device})
         types = [type(e) for e in entities]
         assert ImouMotionSensor not in types

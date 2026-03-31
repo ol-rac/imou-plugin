@@ -29,20 +29,20 @@ def _make_coordinator(devices: dict) -> MagicMock:
 
 
 def _make_privacy_device(serial: str = "ABC123DEF456", privacy_enabled: bool | None = None) -> ImouDeviceData:
-    """Return a device data with closedCamera capability."""
+    """Return a device data with CloseCamera capability."""
     return ImouDeviceData(
         serial=serial,
         name="Front Door Camera",
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=DeviceStatus.ACTIVE,
-        capabilities={"Dormant", "closedCamera", "MobileDetect"},
+        capabilities={"Dormant", "CloseCamera", "MobileDetect"},
         privacy_enabled=privacy_enabled,
     )
 
 
 def _make_no_privacy_device(serial: str = "NOPRIVACY123") -> ImouDeviceData:
-    """Return a device without closedCamera capability."""
+    """Return a device without CloseCamera capability."""
     return ImouDeviceData(
         serial=serial,
         name="Basic Camera",
@@ -60,7 +60,7 @@ def _make_no_privacy_device(serial: str = "NOPRIVACY123") -> ImouDeviceData:
 
 @pytest.mark.asyncio
 async def test_setup_entry_creates_switch_for_privacy_capable_device(hass) -> None:
-    """Test that async_setup_entry creates ImouPrivacySwitch for closedCamera devices (CTRL-01, D-08)."""
+    """Test that async_setup_entry creates ImouPrivacySwitch for CloseCamera devices (CTRL-01, D-08)."""
     from custom_components.imou_ha.switch import async_setup_entry
 
     device = _make_privacy_device()
@@ -82,7 +82,7 @@ async def test_setup_entry_creates_switch_for_privacy_capable_device(hass) -> No
 
 @pytest.mark.asyncio
 async def test_setup_entry_creates_no_switch_without_privacy_capability(hass) -> None:
-    """Test that async_setup_entry creates no switch for devices without closedCamera."""
+    """Test that async_setup_entry creates no switch for devices without CloseCamera."""
     from custom_components.imou_ha.switch import async_setup_entry
 
     device = _make_no_privacy_device()
@@ -102,7 +102,7 @@ async def test_setup_entry_creates_no_switch_without_privacy_capability(hass) ->
 
 @pytest.mark.asyncio
 async def test_setup_entry_mixed_devices(hass) -> None:
-    """Test that async_setup_entry only creates switch for closedCamera capable devices."""
+    """Test that async_setup_entry only creates switch for CloseCamera capable devices."""
     from custom_components.imou_ha.switch import async_setup_entry
 
     privacy_device = _make_privacy_device("ABC123DEF456")

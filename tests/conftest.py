@@ -33,7 +33,7 @@ def sample_device_data() -> ImouDeviceData:
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=DeviceStatus.ACTIVE,
-        capabilities={"Dormant", "closedCamera", "MobileDetect"},
+        capabilities={"Dormant", "CloseCamera", "MobileDetect"},
     )
 
 
@@ -46,7 +46,7 @@ def battery_device_data() -> ImouDeviceData:
         model="IPC-B26EP",
         firmware="2.840.0000000.28.R",
         status=DeviceStatus.ACTIVE,
-        capabilities={"Dormant", "Electric", "closedCamera"},
+        capabilities={"Dormant", "Electric", "CloseCamera"},
         battery_level=85,
         battery_power_source="battery",
     )

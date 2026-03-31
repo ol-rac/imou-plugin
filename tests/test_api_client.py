@@ -31,7 +31,7 @@ def _make_mock_device(
     device_model: str = "IPC-C22EP",
     device_version: str = "2.840.0000000.28.R",
     device_status: str = "1",
-    device_ability: str = "Dormant,closedCamera,MobileDetect",
+    device_ability: str = "Dormant,CloseCamera,MobileDetect",
 ) -> MagicMock:
     """Build a mock ImouDevice with the given properties."""
     dev = MagicMock()
@@ -155,7 +155,7 @@ class TestAsyncGetDevices:
     async def test_dormant_in_abilities_sets_dormant_capability(self) -> None:
         """Device with 'Dormant' in abilities must have it in capabilities set."""
         client = _make_client()
-        mock_device = _make_mock_device(device_ability="Dormant,closedCamera")
+        mock_device = _make_mock_device(device_ability="Dormant,CloseCamera")
         with patch(
             "custom_components.imou_ha.api_client.ImouDeviceManager"
         ) as MockManager:
@@ -201,7 +201,7 @@ class TestAsyncGetDevices:
 
     async def test_capabilities_parsed_from_comma_string(self) -> None:
         client = _make_client()
-        mock_device = _make_mock_device(device_ability="Dormant,closedCamera,MobileDetect")
+        mock_device = _make_mock_device(device_ability="Dormant,CloseCamera,MobileDetect")
         with patch(
             "custom_components.imou_ha.api_client.ImouDeviceManager"
         ) as MockManager:
@@ -210,12 +210,12 @@ class TestAsyncGetDevices:
 
         caps = result[DEVICE_SERIAL].capabilities
         assert "Dormant" in caps
-        assert "closedCamera" in caps
+        assert "CloseCamera" in caps
         assert "MobileDetect" in caps
 
     async def test_capabilities_parsed_from_list(self) -> None:
         client = _make_client()
-        mock_device = _make_mock_device(device_ability=["Dormant", "closedCamera"])
+        mock_device = _make_mock_device(device_ability=["Dormant", "CloseCamera"])
         with patch(
             "custom_components.imou_ha.api_client.ImouDeviceManager"
         ) as MockManager:

@@ -40,7 +40,7 @@ SAMPLE_DEVICE = ImouDeviceData(
     model="IPC-C22EP",
     firmware="2.840.0",
     status=DeviceStatus.ACTIVE,
-    capabilities={"Dormant", "closedCamera", "MobileDetect"},
+    capabilities={"Dormant", "CloseCamera", "MobileDetect"},
 )
 
 

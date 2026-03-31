@@ -45,7 +45,7 @@ def _make_device_data(
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=status,
-        capabilities=capabilities or {"Dormant", "closedCamera"},
+        capabilities=capabilities or {"Dormant", "CloseCamera"},
     )
 
 
@@ -440,7 +440,7 @@ class TestAlarmPolling:
         """_async_poll_device does NOT call async_get_alarm_status for devices without motion capability."""
         device = _make_device_data(
             status=DeviceStatus.ACTIVE,
-            capabilities={"Dormant", "closedCamera"},
+            capabilities={"Dormant", "CloseCamera"},
         )
         client = _make_mock_client({SERIAL: device})
         client.async_get_alarm_status = AsyncMock(return_value=(False, False))

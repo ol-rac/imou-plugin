@@ -44,7 +44,7 @@ def _make_device(
         model="IPC-C22EP",
         firmware="2.840.0000000.28.R",
         status=status,
-        capabilities=capabilities or {"Dormant", "closedCamera"},
+        capabilities=capabilities or {"Dormant", "CloseCamera"},
         battery_level=battery_level,
         battery_power_source=battery_power_source,
     )
@@ -175,7 +175,7 @@ class TestImouBatterySensor:
         device = _make_device(
             serial=serial,
             status=status,
-            capabilities={"Dormant", "Electric", "closedCamera"},
+            capabilities={"Dormant", "Electric", "CloseCamera"},
             battery_level=battery_level,
             battery_power_source=battery_power_source,
         )

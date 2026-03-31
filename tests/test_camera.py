@@ -240,10 +240,10 @@ class TestCoordinatorPrivacyPolling:
     async def test_privacy_polled_for_closedcamera_device(
         self, make_coordinator, sample_device_data
     ):
-        """coordinator _async_poll_device polls privacy_enabled for closedCamera devices."""
+        """coordinator _async_poll_device polls privacy_enabled for CloseCamera devices."""
         coordinator, client = make_coordinator
-        # sample_device_data has "closedCamera" capability
-        assert "closedCamera" in sample_device_data.capabilities
+        # sample_device_data has "CloseCamera" capability
+        assert "CloseCamera" in sample_device_data.capabilities
 
         await coordinator._async_poll_device("ABC123DEF456", sample_device_data)
 
@@ -251,17 +251,17 @@ class TestCoordinatorPrivacyPolling:
         assert sample_device_data.privacy_enabled is True
 
     async def test_privacy_skipped_for_device_without_capability(self, hass):
-        """coordinator _async_poll_device skips privacy polling without closedCamera."""
+        """coordinator _async_poll_device skips privacy polling without CloseCamera."""
         from custom_components.imou_ha.coordinator import ImouCoordinator
 
-        # Create device without closedCamera capability
+        # Create device without CloseCamera capability
         device = ImouDeviceData(
             serial="XYZ789",
             name="No Privacy Camera",
             model="IPC-A10",
             firmware="1.0",
             status=DeviceStatus.ACTIVE,
-            capabilities={"Dormant"},  # no closedCamera, no MobileDetect
+            capabilities={"Dormant"},  # no CloseCamera, no MobileDetect
         )
 
         client = AsyncMock()
