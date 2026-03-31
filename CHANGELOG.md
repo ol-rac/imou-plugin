@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-03-31)
+
+### Features
+
+- **09-01**: Clean up API client and add wake constants to const.py
+  ([`ce77180`](https://github.com/ol-rac/imou-plugin/commit/ce771804f2b43625853f28939d7c542a437314f7))
+
+- **09-01**: Rework privacy switch wake flow and consolidate wake button
+  ([`3c9a0e6`](https://github.com/ol-rac/imou-plugin/commit/3c9a0e6311b47ff407f49adf885b87d57e50f49f))
+
+- **09-01**: Rework privacy switch with wake-then-verify for battery cameras
+  ([`a769a17`](https://github.com/ol-rac/imou-plugin/commit/a769a170b24ae576181ef4e548471db2932ff315))
+
+### Testing
+
+- CloseDormant button retries 5 times with 5s delay
+  ([`63ecbe9`](https://github.com/ol-rac/imou-plugin/commit/63ecbe953f9d6256aa42b126e81d0c979e7fc17f))
+
+- **09-01**: Add failing tests for wake-and-verify flow (TDD red phase)
+  ([`1f93682`](https://github.com/ol-rac/imou-plugin/commit/1f93682bb2e99af02849c3fdada4f286f6e91842))
+
+
 ## v0.4.3 (2026-03-31)
 
 ### Bug Fixes
