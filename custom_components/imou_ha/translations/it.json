@@ -78,17 +78,12 @@
     },
     "switch": {
       "privacy": {
-        "name": "Modalita privacy"
+        "name": "Modalit\u00e0 privacy"
       }
     },
-    "camera": {
-      "camera": {
-        "name": "Telecamera"
-      }
-    },
-    "switch": {
-      "privacy": {
-        "name": "Modalita privacy"
+    "button": {
+      "wake_up": {
+        "name": "Risveglia"
       }
     }
   }

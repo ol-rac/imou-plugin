@@ -81,14 +81,9 @@
         "name": "Privacy mode"
       }
     },
-    "camera": {
-      "camera": {
-        "name": "Camera"
-      }
-    },
-    "switch": {
-      "privacy": {
-        "name": "Privacy mode"
+    "button": {
+      "wake_up": {
+        "name": "Wake up"
       }
     }
   }
