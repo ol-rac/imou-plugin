@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-03-31)
+
+### Features
+
+- Add two wake-up test buttons (closeDormant vs wakeUpDevice)
+  ([`a74bca4`](https://github.com/ol-rac/imou-plugin/commit/a74bca4c9d18f9b3a3ab098fe9d736227ae6f8f0))
+
+
 ## v0.3.0 (2026-03-31)
 
 ### Features
