@@ -401,23 +401,6 @@ class ImouApiClient:
         except ImouException as err:
             raise ImouError(str(err)) from err
 
-    async def async_wake_up_device(self, device_id: str) -> None:
-        """Wake up a sleeping/dormant device via /openapi/wakeUpDevice.
-
-        Raises:
-            ImouError: for any failure.
-
-        """
-        self._increment_budget()
-        if self._device_manager is None:
-            self._device_manager = ImouDeviceManager(self._client)
-        try:
-            await self._device_manager.async_wake_up_device(device_id)
-        except RequestFailedException as err:
-            raise self._translate_exception(err) from err
-        except ImouException as err:
-            raise ImouError(str(err)) from err
-
     async def async_wake_up_via_dormant(self, device_id: str) -> None:
         """Wake up a sleeping device via setDeviceCameraStatus(closeDormant=True).
 
