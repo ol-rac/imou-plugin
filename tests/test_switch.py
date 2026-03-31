@@ -40,6 +40,19 @@ def _make_privacy_device(serial: str = "ABC123DEF456", privacy_enabled: bool | N
     )
 
 
+def _make_powered_privacy_device(serial: str = "ABC123DEF456", privacy_enabled: bool | None = None) -> ImouDeviceData:
+    """Return a powered (non-battery) device with CloseCamera capability."""
+    return ImouDeviceData(
+        serial=serial,
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0000000.28.R",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"CloseCamera", "MobileDetect"},
+        privacy_enabled=privacy_enabled,
+    )
+
+
 def _make_no_privacy_device(serial: str = "NOPRIVACY123") -> ImouDeviceData:
     """Return a device without CloseCamera capability."""
     return ImouDeviceData(
@@ -176,7 +189,7 @@ async def test_turn_on_confirms_state_on_match() -> None:
     """Test async_turn_on sends set_privacy_mode(True) and confirms state on poll match (CTRL-02, D-10)."""
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_get_privacy_mode = AsyncMock(return_value=True)
 
@@ -198,7 +211,7 @@ async def test_turn_off_confirms_state_on_match() -> None:
     """Test async_turn_off sends set_privacy_mode(False) and confirms state on poll match (CTRL-02)."""
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=True)
+    device = _make_powered_privacy_device(privacy_enabled=True)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
 
@@ -220,10 +233,11 @@ async def test_state_not_updated_optimistically() -> None:
     """Test that state is NOT updated before verification (D-14, non-optimistic pattern).
 
     privacy_enabled should remain unchanged until poll confirms the new state.
+    Only applies to powered (non-battery) cameras — battery cameras use optimistic state.
     """
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
 
     # Simulate slow/late confirmation: never returns True during first call
@@ -305,7 +319,7 @@ async def test_verification_timeout_reverts_state() -> None:
     """Test verification timeout after 3 retries — reverts to previous state (CTRL-04, D-16)."""
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     # Always returns opposite of desired state (never confirms)
     coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
@@ -329,7 +343,7 @@ async def test_device_offline_during_verification_breaks_loop() -> None:
     """Test that offline error during verification polling breaks loop and reverts state (D-15)."""
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     # Raises offline error during poll
     coordinator.client.async_get_privacy_mode = AsyncMock(
@@ -355,7 +369,7 @@ async def test_verification_succeeds_on_second_retry() -> None:
     """Test verification succeeds on 2nd retry (not just 1st attempt)."""
     from custom_components.imou_ha.switch import ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     # First poll returns False (no match), second poll returns True (match)
     coordinator.client.async_get_privacy_mode = AsyncMock(side_effect=[False, True])
@@ -376,11 +390,33 @@ async def test_verification_succeeds_on_second_retry() -> None:
 
 
 @pytest.mark.asyncio
+async def test_battery_camera_uses_optimistic_state() -> None:
+    """Test battery (Dormant) camera trusts command without verification polling."""
+    from custom_components.imou_ha.switch import ImouPrivacySwitch
+
+    device = _make_privacy_device(privacy_enabled=False)
+    coordinator = _make_coordinator({"ABC123DEF456": device})
+
+    switch = ImouPrivacySwitch.__new__(ImouPrivacySwitch)
+    switch.coordinator = coordinator
+    switch._device_serial = "ABC123DEF456"
+    switch.async_write_ha_state = MagicMock()
+
+    with patch("custom_components.imou_ha.switch.asyncio.sleep", new_callable=AsyncMock):
+        await switch.async_turn_on()
+
+    # Battery camera: state updated immediately, no verification poll
+    assert device.privacy_enabled is True
+    switch.async_write_ha_state.assert_called_once()
+    coordinator.client.async_get_privacy_mode.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_verify_max_retries_count() -> None:
     """Test that verification polls exactly VERIFY_MAX_RETRIES times on timeout."""
     from custom_components.imou_ha.switch import VERIFY_MAX_RETRIES, ImouPrivacySwitch
 
-    device = _make_privacy_device(privacy_enabled=False)
+    device = _make_powered_privacy_device(privacy_enabled=False)
     coordinator = _make_coordinator({"ABC123DEF456": device})
     # Never confirms
     coordinator.client.async_get_privacy_mode = AsyncMock(return_value=False)
