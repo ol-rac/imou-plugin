@@ -434,6 +434,7 @@ class ImouApiClient:
                 "/openapi/setDeviceCameraStatus",
                 {
                     "deviceId": device_id,
+                    "channelId": "0",
                     "enableType": ENABLE_TYPE_CLOSE_DORMANT,
                     "enable": True,
                 },
