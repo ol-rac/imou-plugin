@@ -463,7 +463,7 @@ async def test_motion_event_wakes_sleeping_device(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -492,7 +492,7 @@ async def test_human_event_wakes_sleeping_device(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -520,7 +520,7 @@ async def test_motion_event_wakes_offline_device(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"OFFLINE_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -550,7 +550,7 @@ async def test_motion_event_status_check_fails_gracefully(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        side_effect=ImouError("API error")
+        side_effect=ImouError("API error"),
     )
 
     await _call_handler(
@@ -580,7 +580,7 @@ async def test_motion_event_active_device_skips_status_check(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"ACTIVE_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -614,7 +614,7 @@ async def test_device_status_event_wakes_sleeping_device(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -642,7 +642,7 @@ async def test_device_status_event_sets_sleeping(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"BATT_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.SLEEPING
+        return_value=DeviceStatus.SLEEPING,
     )
 
     await _call_handler(
@@ -669,7 +669,7 @@ async def test_device_status_event_no_change(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"CAM1": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        return_value=DeviceStatus.ACTIVE
+        return_value=DeviceStatus.ACTIVE,
     )
 
     await _call_handler(
@@ -697,7 +697,7 @@ async def test_device_status_event_api_failure_keeps_old_status(hass):
     )
     coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
     coordinator.client.async_get_device_online_status = AsyncMock(
-        side_effect=ImouError("API error")
+        side_effect=ImouError("API error"),
     )
 
     await _call_handler(
