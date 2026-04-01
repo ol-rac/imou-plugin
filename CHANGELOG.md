@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-04-01)
+
+### Bug Fixes
+
+- Handle deviceStatus webhook and implicit wake on motion/human events
+  ([`7815bc3`](https://github.com/ol-rac/imou-plugin/commit/7815bc3ad91a99a6b02fbb8105a4e53577015e9c))
+
+### Features
+
+- **09-02**: Replace test buttons with single ImouWakeUpButton, add button tests
+  ([`221b97e`](https://github.com/ol-rac/imou-plugin/commit/221b97ef4bb083878d538443fe166cddccc834ca))
+
+
 ## v0.5.2 (2026-03-31)
 
 ### Bug Fixes
