@@ -59,7 +59,7 @@ async def _async_refresh_device_status(
             device.status = new_status
     except ImouError as err:
         _LOGGER.debug(
-            "deviceStatus refresh failed for %s: %s", device_serial, err
+            "deviceStatus refresh failed for %s: %s", device_serial, err,
         )
 
 
@@ -88,7 +88,7 @@ async def _async_handle_implicit_wake(
             device.status = DeviceStatus.ACTIVE
     except ImouError as err:
         _LOGGER.debug(
-            "Implicit wake status check failed for %s: %s", device_serial, err
+            "Implicit wake status check failed for %s: %s", device_serial, err,
         )
 
 
