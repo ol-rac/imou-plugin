@@ -439,6 +439,277 @@ async def test_missing_appid_not_rejected(hass):
     assert device.motion_detected is True
 
 
+# ---------------------------------------------------------------------------
+# Implicit wake: sleeping device receives motion/human event
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_motion_event_wakes_sleeping_device(hass):
+    """Autonomous wake: motion event for SLEEPING device transitions status to ACTIVE.
+
+    A camera sending a motion event must be awake. The webhook handler should
+    call async_get_device_online_status and set status=ACTIVE so all entities
+    become available immediately.
+    """
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="SLEEP_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.SLEEPING,
+        capabilities={"Dormant", "MobileDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "SLEEP_CAM", "msgType": "videoMotion"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.ACTIVE
+    assert device.motion_detected is True
+    coordinator.client.async_get_device_online_status.assert_awaited_once_with("SLEEP_CAM")
+
+
+@pytest.mark.asyncio
+async def test_human_event_wakes_sleeping_device(hass):
+    """Autonomous wake: human event for SLEEPING device transitions status to ACTIVE."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="SLEEP_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.SLEEPING,
+        capabilities={"Dormant", "HeaderDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "SLEEP_CAM", "msgType": "human"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.ACTIVE
+    assert device.human_detected is True
+
+
+@pytest.mark.asyncio
+async def test_motion_event_wakes_offline_device(hass):
+    """Autonomous wake: motion event for OFFLINE device transitions status to ACTIVE."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="OFFLINE_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.OFFLINE,
+        capabilities={"Dormant", "MobileDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"OFFLINE_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "OFFLINE_CAM", "msgType": "MobileDetect"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_motion_event_status_check_fails_gracefully(hass):
+    """If status API call fails during implicit wake check, device stays SLEEPING.
+
+    The motion_detected flag should still be set — the wake check failure is non-fatal.
+    """
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="SLEEP_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.SLEEPING,
+        capabilities={"Dormant", "MobileDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        side_effect=ImouError("API error")
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "SLEEP_CAM", "msgType": "videoMotion"},
+        coordinator,
+    )
+
+    # Wake check failed but motion event should still be recorded
+    assert device.motion_detected is True
+    # Status unchanged — still SLEEPING
+    assert device.status == DeviceStatus.SLEEPING
+
+
+@pytest.mark.asyncio
+async def test_motion_event_active_device_skips_status_check(hass):
+    """ACTIVE device receiving motion event should NOT trigger a status check API call."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="ACTIVE_CAM",
+        name="Front Door Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"MobileDetect"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"ACTIVE_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "ACTIVE_CAM", "msgType": "videoMotion"},
+        coordinator,
+    )
+
+    # No status check needed for already-ACTIVE device
+    coordinator.client.async_get_device_online_status.assert_not_awaited()
+    assert device.motion_detected is True
+
+
+# ---------------------------------------------------------------------------
+# deviceStatus webhook: device state transitions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_device_status_event_wakes_sleeping_device(hass):
+    """deviceStatus webhook transitions SLEEPING device to ACTIVE."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="SLEEP_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.SLEEPING,
+        capabilities={"Dormant"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "SLEEP_CAM", "msgType": "deviceStatus"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.ACTIVE
+    coordinator.client.async_get_device_online_status.assert_awaited_once_with("SLEEP_CAM")
+
+
+@pytest.mark.asyncio
+async def test_device_status_event_sets_sleeping(hass):
+    """deviceStatus webhook transitions ACTIVE device to SLEEPING."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="BATT_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities={"Dormant"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"BATT_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.SLEEPING
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "BATT_CAM", "msgType": "deviceStatus"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.SLEEPING
+
+
+@pytest.mark.asyncio
+async def test_device_status_event_no_change(hass):
+    """deviceStatus webhook with same status does not log a transition."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="CAM1",
+        name="Camera",
+        model="IPC-C22EP",
+        firmware="2.840.0",
+        status=DeviceStatus.ACTIVE,
+        capabilities=set(),
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"CAM1": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        return_value=DeviceStatus.ACTIVE
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "CAM1", "msgType": "deviceStatus"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.ACTIVE
+    coordinator.client.async_get_device_online_status.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_device_status_event_api_failure_keeps_old_status(hass):
+    """deviceStatus webhook: API failure leaves status unchanged."""
+    entry = _create_mock_entry(hass)
+    device = ImouDeviceData(
+        serial="SLEEP_CAM",
+        name="Battery Camera",
+        model="IPC-B46LP",
+        firmware="2.840.0",
+        status=DeviceStatus.SLEEPING,
+        capabilities={"Dormant"},
+    )
+    coordinator = _make_coordinator_with_devices(hass, {"SLEEP_CAM": device})
+    coordinator.client.async_get_device_online_status = AsyncMock(
+        side_effect=ImouError("API error")
+    )
+
+    await _call_handler(
+        hass,
+        entry,
+        {"appId": MOCK_APP_ID, "did": "SLEEP_CAM", "msgType": "deviceStatus"},
+        coordinator,
+    )
+
+    assert device.status == DeviceStatus.SLEEPING
+
+
 @pytest.mark.asyncio
 async def test_non_json_payload_returns_400(hass, mock_webhook_request):
     """D-08: Non-JSON payload (request.json raises ValueError) returns HTTP 400."""

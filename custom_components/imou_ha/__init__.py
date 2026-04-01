@@ -15,6 +15,7 @@ from homeassistant.helpers.network import NoURLAvailableError
 from .api_client import ImouApiClient
 from .budget import BUDGET_STORAGE_KEY, ImouBudgetState
 from .exceptions import ImouError
+from .models import DeviceStatus, ImouDeviceData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -32,6 +33,63 @@ from .const import (
 from .coordinator import ImouCoordinator, ImouHaConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _async_refresh_device_status(
+    coordinator: ImouCoordinator,
+    device_serial: str,
+    device: ImouDeviceData,
+) -> None:
+    """Refresh device status in response to a deviceStatus webhook event.
+
+    Imou Cloud sends deviceStatus events when a device changes state (wakes up,
+    goes offline, enters dormancy).  Fetch the actual status from the API and
+    update the local model so entities become available/unavailable immediately.
+    """
+    old_status = device.status
+    try:
+        new_status = await coordinator.client.async_get_device_online_status(device_serial)
+        if new_status != old_status:
+            _LOGGER.info(
+                "Device %s status changed via deviceStatus webhook: %s → %s",
+                device_serial,
+                old_status.value,
+                new_status.value,
+            )
+            device.status = new_status
+    except ImouError as err:
+        _LOGGER.debug(
+            "deviceStatus refresh failed for %s: %s", device_serial, err
+        )
+
+
+async def _async_handle_implicit_wake(
+    coordinator: ImouCoordinator,
+    device_serial: str,
+    device: ImouDeviceData,
+) -> None:
+    """Handle implicit wake detected via a motion/human webhook event.
+
+    A camera sending a motion or human detection event must be awake.  If the
+    device is currently marked SLEEPING or OFFLINE, confirm online status and
+    transition to ACTIVE so all entities become available immediately (D-11).
+    """
+    if device.status not in (DeviceStatus.SLEEPING, DeviceStatus.OFFLINE):
+        return
+    try:
+        new_status = await coordinator.client.async_get_device_online_status(device_serial)
+        if new_status == DeviceStatus.ACTIVE:
+            _LOGGER.info(
+                "Device %s woke autonomously (detected via %s webhook event) — transitioning from %s to ACTIVE",
+                device_serial,
+                "motion/human",
+                device.status.value,
+            )
+            device.status = DeviceStatus.ACTIVE
+    except ImouError as err:
+        _LOGGER.debug(
+            "Implicit wake status check failed for %s: %s", device_serial, err
+        )
 
 
 def _make_webhook_handler(entry: ImouHaConfigEntry):
@@ -74,14 +132,18 @@ def _make_webhook_handler(entry: ImouHaConfigEntry):
         msg_type = payload.get("msgType", "")
         if msg_type in ("videoMotion", "MobileDetect", "AlarmMD"):
             device.motion_detected = True
+            await _async_handle_implicit_wake(coordinator, device_serial, device)
             coordinator.async_set_updated_data(coordinator.data)
         elif msg_type in ("human", "HeaderDetect", "AiHuman"):
             device.human_detected = True
+            await _async_handle_implicit_wake(coordinator, device_serial, device)
             coordinator.async_set_updated_data(coordinator.data)
         elif msg_type == "deviceStatus":
             _LOGGER.debug(
                 "Imou webhook: deviceStatus event for %s: %s", device_serial, payload,
             )
+            await _async_refresh_device_status(coordinator, device_serial, device)
+            coordinator.async_set_updated_data(coordinator.data)
         else:
             _LOGGER.debug(
                 "Imou webhook: unrecognized msgType '%s' for %s",
